@@ -12,6 +12,7 @@ pub enum Value {
     StringLiteral(String),
     Reg(u16),
     Pool(u16),
+    CPool(usize),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -19,11 +20,14 @@ pub enum Instr {
     // Load Immediate into register
     LoadI,
 
-    // Load a value from the constant pool
+    // Load a value from the local variable stack
     LoadP,
 
-    // Push a value to the constant pool
+    // Push a value to the local variable stack
     PushP,
+
+    // Load value from constant pool
+    LoadC,
 
     // res = r1 + r2
     Add,
@@ -76,7 +80,7 @@ pub struct Codegen {
 impl Codegen {
 
     /// Convert ast into bytecodearray
-    pub fn bytecode_gen(ast: Vec<Stmt>) -> Vec<BcArr> {
+    pub fn bytecode_gen(ast: Vec<Stmt>) -> (Vec<BcArr>, Vec<Value>) {
         let mut codegen = Codegen {
             bytecode: Vec::new(),
             const_pool: Vec::new(),
@@ -93,7 +97,7 @@ impl Codegen {
         //    println!("\n{:?}", e);
         //}
 
-        codegen.bytecode
+        (codegen.bytecode, codegen.const_pool)
     }
 
     /// Emit instructions
@@ -117,6 +121,12 @@ impl Codegen {
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 //println!("PushP {:?}, {:?}", res, r1); 
+            },
+            BcArr::I(Instr::LoadC) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
+                //println!("LoadC {:?}, {:?}", res, r1); 
             },
             BcArr::I(Instr::Print) => {
                 self.bytecode.push(instr);
@@ -226,7 +236,6 @@ impl Codegen {
         }
         self.pool.push( var.clone() );
         let index: u16 = self.get_pool(&name.value);
-        println!("index: {} ; pool: {:?}", index, self.pool);
         self.emit_instr(BcArr::I(Instr::PushP), 
                         BcArr::V(Value::Reg(e)), 
                         BcArr::V(Value::Nil), 
@@ -280,17 +289,16 @@ impl Codegen {
                                         BcArr::V(Value::Reg(res))); 
                     },
                     Literal::StringLiteral(s) => {
-                        let depth = self.cur_depth;
-                        let var = Vars {name: s.clone(), depth: depth};
-                        if !self.pool.contains(&var) {  self.pool.push( var ); }
-                        let index = self.get_pool(&s);
+                        self.const_pool.push(Value::StringLiteral(s));
+                        let const_index = self.get_next_const();
+
+                        //let r1 = self.get_next_reg();
                         res = self.get_next_reg();
 
-                        self.emit_instr(BcArr::I(Instr::LoadI), 
-                                        BcArr::V(Value::StringLiteral(s.clone())), 
+                        self.emit_instr(BcArr::I(Instr::LoadC), 
+                                        BcArr::V(Value::CPool(const_index)), 
                                         BcArr::V(Value::Nil), 
                                         BcArr::V(Value::Reg(res))); 
-
                     },
                     _ => { panic!("Literal type not implemented"); },
                 }
@@ -316,7 +324,6 @@ impl Codegen {
                                 BcArr::V(Value::Nil), 
                                 BcArr::V(Value::Pool(pool_index)));
 
-                println!("pool: {:#?}", self.pool);
                 //panic!("Name: {:#?} ; expr: {:#?}", s, v);
             }
             _ => { panic!("Expression not yet implemented in codegen: 

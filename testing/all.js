@@ -1,9 +1,9 @@
 var hello = "hello world";
-var a1 = 5;
-print a1;
+var num = (5 + 3) / 2;
+
 print hello;
-//{
-//	hello = hello + 42;
-//	print hello;
-//}
-//print hello;
+{
+	var hello = hello + num;
+	print hello;
+}
+print hello;

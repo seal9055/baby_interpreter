@@ -43,7 +43,11 @@ fn main() {
     let file_name = args[1].to_string();
     let file_string = fs::read_to_string(file_name)
         .expect("Unable to read file");
-    println!("{}", file_string);
+
+    if DEBUG {
+        println!("\n+-----------Source-Code------------+");
+        println!("{}", file_string);
+    }
 
     #[allow(unused_mut)]
     let mut tokens = tokenize(&file_string);
@@ -64,7 +68,7 @@ fn main() {
     };
     //print!("Statements: {:#?}", stmts);
 
-    let bytecode = Codegen::bytecode_gen(stmts);
+    let (bytecode, const_pool) = Codegen::bytecode_gen(stmts);
 
     if DEBUG {
         print!("+-----------Bytecode--------------+");
@@ -75,12 +79,17 @@ fn main() {
                 BcArr::V(Value::Reg(v)) => { print!("{:?}, ", Value::Reg(v)) },
                 BcArr::V(Value::Pool(v)) => { print!("{:?}, ", Value::Pool(v)) },
                 BcArr::V(Value::StringLiteral(v)) => { print!("{:?}, ", v) },
+                BcArr::V(Value::CPool(v)) => { print!("{:?}, ", Value::CPool(v)) },
                 _ => { panic!("print stuff"); },
             }
         }
-        println!("\n+--------------------------------+\n");
+        println!("\n+-----------Const-Pool-------------+\n");
+        for (i,c) in const_pool.clone().iter().enumerate() {
+            println!("[{}] - {:?}", i, c);
+        }
+        println!("\n+----------------------------------+\n");
     }
     
-    let mut vm = Interpreter::new(bytecode);
+    let mut vm = Interpreter::new(bytecode, const_pool);
     vm.interpret();
 }

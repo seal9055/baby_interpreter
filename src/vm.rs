@@ -27,16 +27,17 @@ pub struct Interpreter {
     /// Holds variables currently in scope
     local_pool: Vec<Value>, 
 
-    // Holds variables currently in scope
-    //constant_pool: Vec<Vars>, 
+    /// Holds constants
+    const_pool: Vec<Value>, 
 }
 
 impl Interpreter {
 
     /// Returns new interpreter object
-    pub fn new(bytecode: Vec<BcArr>) -> Self {
+    pub fn new(bytecode: Vec<BcArr>, const_pool: Vec<Value>) -> Self {
         Self {
             bytecode: bytecode,
+            const_pool: const_pool,
             ip: 0,
             regs: Vec::new(),
             local_pool: Vec::new(),
@@ -73,6 +74,11 @@ impl Interpreter {
         extract_enum_value!(reg, BcArr::V(Value::Pool(c)) => c) as usize
     }
 
+    /// Unpacks a pool_index from the BcArr enum
+    fn unpack_cpool(reg: BcArr) -> usize {
+        extract_enum_value!(reg, BcArr::V(Value::CPool(c)) => c) as usize
+    }
+
     /// Unpacks a number from the Value enum
     fn unpack_number(num: &Value) -> f64 {
         *extract_enum_value!(num, Value::Number(c) => c)
@@ -104,6 +110,9 @@ impl Interpreter {
             },
             BcArr::I(Instr::LoadP) => {
                 self.loadp();
+            },
+            BcArr::I(Instr::LoadC) => {
+                self.loadc();
             },
             BcArr::I(Instr::Print) => {
                 self.print();
@@ -162,6 +171,19 @@ impl Interpreter {
         self.regs.push(val.clone());
     }
 
+    /// LoadP instruction
+    fn loadc(&mut self) {
+        let reg  = self.fetch_val();
+        let cpool = self.fetch_val();
+
+        let cpool_index = Interpreter::unpack_cpool(cpool);
+
+        let val = &self.const_pool[cpool_index];
+        //println!("Value is: {:?}", val);
+
+        self.regs.push(val.clone());
+    }
+
     /// Print instruction
     fn print(&mut self) {
         let reg = self.fetch_val();
@@ -175,7 +197,7 @@ impl Interpreter {
             Value::StringLiteral(v) => {
                 println!("{}", v);
             },
-            _ => { panic!("Type not implemented in print"); },
+            _ => { panic!("Type not implemented in print: {:#?}", val); },
         }
     }
 
