@@ -8,8 +8,8 @@ pub enum TokenType {
     SemiColon, Divide, Multiply,
 
     // One or two character tokens
-    Not, NEqual, EqualSign, Equals, Greater, GreaterEqual,
-    Less, LessEqual,
+    Not, NEqual, EqualSign, Equals, Greater, GreaterEq,
+    Less, LessEq,
 
     // Literals
     Identifier, StringLiteral, Number,

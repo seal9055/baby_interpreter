@@ -80,16 +80,18 @@ fn main() {
                 BcArr::V(Value::Pool(v)) => { print!("{:?}, ", Value::Pool(v)) },
                 BcArr::V(Value::StringLiteral(v)) => { print!("{:?}, ", v) },
                 BcArr::V(Value::CPool(v)) => { print!("{:?}, ", Value::CPool(v)) },
+                BcArr::V(Value::Bool(v)) => { print!("{:?}, ", Value::Bool(v)) },
+                BcArr::V(Value::VAddr(v)) => { print!("{:?}, ", Value::VAddr(v)) },
                 _ => { panic!("print stuff"); },
+            } }
+        if const_pool.len() > 0 {
+            println!("\n+-----------Const-Pool-------------+\n");
+            for (i,c) in const_pool.clone().iter().enumerate() {
+                println!("[{}] - {:?}", i, c);
             }
-        }
-        println!("\n+-----------Const-Pool-------------+\n");
-        for (i,c) in const_pool.clone().iter().enumerate() {
-            println!("[{}] - {:?}", i, c);
-        }
-        println!("\n+----------------------------------+\n");
+            println!("\n+----------------------------------+\n");
+        } else { println!("\n+----------------------------------+\n"); }
     }
-    
     let mut vm = Interpreter::new(bytecode, const_pool);
     vm.interpret();
 }

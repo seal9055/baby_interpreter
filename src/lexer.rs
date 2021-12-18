@@ -144,7 +144,7 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                     cur_token.value.push(c);
                 if *lexer.peek().unwrap() == '=' {
                     cur_token.value.push('=');
-                    cur_token.t_type = GreaterEqual;
+                    cur_token.t_type = GreaterEq;
                     lexer.next();
                 } else {
                     cur_token.t_type = Greater;
@@ -156,7 +156,7 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                     cur_token.value.push(c);
                 if *lexer.peek().unwrap() == '=' {
                     cur_token.value.push('=');
-                    cur_token.t_type = LessEqual;
+                    cur_token.t_type = LessEq;
                     lexer.next();
                 } else {
                     cur_token.t_type = Less;

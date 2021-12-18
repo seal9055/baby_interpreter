@@ -9,10 +9,12 @@ use crate::{
 pub enum Value {
     Nil,
     Number(f64),
+    Bool(bool),
     StringLiteral(String),
     Reg(u16),
     Pool(u16),
     CPool(usize),
+    VAddr(usize),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -40,6 +42,27 @@ pub enum Instr {
 
     // res = r1 / r2
     Div,
+
+    // Compare if r1 < r2
+    CmpLT,
+
+    // Compare if r1 <= r2
+    CmpLE,
+
+    // Compare if r1 > r2
+    CmpGT,
+
+    // Compare if r1 >= r2
+    CmpGE,
+
+    // Compare if r1 == r2
+    CmpEq,
+
+    // Jump if flag is set
+    JmpIf,
+
+    // Unconditional jump
+    JmpUc,
 
     // Builtin - print r1
     Print,
@@ -161,6 +184,51 @@ impl Codegen {
                 self.bytecode.push(r2);
                 //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
+            BcArr::I(Instr::CmpLT) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
+                self.bytecode.push(r2);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
+            BcArr::I(Instr::CmpLE) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
+                self.bytecode.push(r2);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
+            BcArr::I(Instr::CmpGT) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
+                self.bytecode.push(r2);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
+            BcArr::I(Instr::CmpGE) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
+                self.bytecode.push(r2);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
+            BcArr::I(Instr::CmpEq) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
+                self.bytecode.push(r2);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
+            BcArr::I(Instr::JmpUc) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(r1);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
+            BcArr::I(Instr::JmpIf) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(r1);
+                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
+            },
             _ => { panic!("unimplemented instruction"); }
         }
     }
@@ -172,7 +240,7 @@ impl Codegen {
             Stmt::Expression(e)   => { self.expression(e);    },
             Stmt::Variable(n,e)   => { self.assignment(n, e); },
             Stmt::Block(s)        => { self.block(s);   },
-            Stmt::If(_,_,_)       => { panic!("IF"); },
+            Stmt::If(expr, t, f)  => { self.if_stmt(expr, t, f); },
             Stmt::Return(_)       => { panic!("RETURN"); },
             Stmt::While(_,_)      => { panic!("WHILE"); },
             Stmt::Print(e)        => { self.print(e);         },
@@ -218,11 +286,50 @@ impl Codegen {
         self.cur_depth -= 1;
     }
 
+    /// Interpret if statements
+    fn if_stmt(&mut self, expr: Expr, t: Box<Stmt>, f: Option<Box<Stmt>>) 
+        -> () {
+
+        self.expression(expr);
+        let tmp = self.reg_counter;
+
+        let offset1 = self.bytecode.len() + 1;
+        println!("offset: {:?}", offset1);
+
+        self.emit_instr(BcArr::I(Instr::JmpIf), 
+                        BcArr::V(Value::VAddr(0)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Nil));
+
+        match f {
+            Some(x) => { self.interpret_node(&*x); },
+            None    => {},
+        };
+
+        let offset2 = self.bytecode.len() + 1;
+        self.emit_instr(BcArr::I(Instr::JmpUc), 
+                        BcArr::V(Value::VAddr(0)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Nil));
+
+        let jmp_1: usize = self.bytecode.len() - offset1 - 1;
+
+        self.reg_counter = tmp;
+        self.interpret_node(&*t);
+
+        let jmp_2: usize = self.bytecode.len() - offset2 - 1;
+
+        self.bytecode[offset1] = BcArr::V(Value::VAddr(jmp_1));
+        self.bytecode[offset2] = BcArr::V(Value::VAddr(jmp_2));
+    }
+
     /// Builtins, currently only supports print
-    fn print(&mut self, expr: Expr) -> () {
+    fn print(&mut self, expr: Expr) ->  () {
         let e = self.expression(expr);
-        self.emit_instr(BcArr::I(Instr::Print), BcArr::V(Value::Reg(e)), 
-                        BcArr::V(Value::Nil), BcArr::V(Value::Nil));
+        self.emit_instr(BcArr::I(Instr::Print), 
+                        BcArr::V(Value::Reg(e)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Nil));
     }
 
 
@@ -258,20 +365,50 @@ impl Codegen {
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 
                     },
-                    Minus        => { 
+                    Minus       => { 
                         self.emit_instr(BcArr::I(Instr::Sub), 
                             BcArr::V(Value::Reg(r1)), 
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 
                     },
-                    Divide        => { 
+                    Divide      => { 
                         self.emit_instr(BcArr::I(Instr::Div), 
                             BcArr::V(Value::Reg(r1)), 
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 
                     },
-                    Multiply        => { 
+                    Multiply    => { 
                         self.emit_instr(BcArr::I(Instr::Mul), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    Less        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpGT), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    LessEq        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpGE), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    Greater        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpLT), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    GreaterEq        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpLE), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    Equals        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpEq), 
                             BcArr::V(Value::Reg(r1)), 
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 
@@ -312,7 +449,7 @@ impl Codegen {
                                 BcArr::V(Value::Reg(res)));
             },
             Expr::Grouping { expr } => {
-                res = self.expression(*expr)
+                res = self.expression(*expr);
             },
             Expr::Assignment { name, expr } => {
                 let s = name.value;
@@ -323,8 +460,6 @@ impl Codegen {
                                 BcArr::V(Value::Reg(register_index)), 
                                 BcArr::V(Value::Nil), 
                                 BcArr::V(Value::Pool(pool_index)));
-
-                //panic!("Name: {:#?} ; expr: {:#?}", s, v);
             }
             _ => { panic!("Expression not yet implemented in codegen: 
                           {:#?}", expr); },

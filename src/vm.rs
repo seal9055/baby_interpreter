@@ -1,5 +1,5 @@
 use crate::{
-    codegen::{Value, Instr, Vars, BcArr},
+    codegen::{Value, Instr, BcArr},
 };
 
 /// Macro used to extract known enum variants from enums
@@ -29,6 +29,9 @@ pub struct Interpreter {
 
     /// Holds constants
     const_pool: Vec<Value>, 
+
+    /// Flag used to determine conditional jumps
+    flag: bool,
 }
 
 impl Interpreter {
@@ -41,6 +44,7 @@ impl Interpreter {
             ip: 0,
             regs: Vec::new(),
             local_pool: Vec::new(),
+            flag: false,
         }
     }
 
@@ -72,6 +76,11 @@ impl Interpreter {
     /// Unpacks a pool_index from the BcArr enum
     fn unpack_pool(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Pool(c)) => c) as usize
+    }
+
+    /// Unpacks a VAddr from the BcArr enum
+    fn unpack_vaddr(reg: BcArr) -> usize {
+        extract_enum_value!(reg, BcArr::V(Value::VAddr(c)) => c) as usize
     }
 
     /// Unpacks a pool_index from the BcArr enum
@@ -114,6 +123,12 @@ impl Interpreter {
             BcArr::I(Instr::LoadC) => {
                 self.loadc();
             },
+            BcArr::I(Instr::JmpUc) => {
+                self.jmp_unconditional();
+            },
+            BcArr::I(Instr::JmpIf) => {
+                self.jmp_if();
+            },
             BcArr::I(Instr::Print) => {
                 self.print();
             },
@@ -128,6 +143,21 @@ impl Interpreter {
             },
             BcArr::I(Instr::Div) => {
                 self.div();
+            },
+            BcArr::I(Instr::CmpLT) => {
+                self.cmp_less_than();
+            },
+            BcArr::I(Instr::CmpLE) => {
+                self.cmp_less_equal();
+            },
+            BcArr::I(Instr::CmpGT) => {
+                self.cmp_greater_than();
+            },
+            BcArr::I(Instr::CmpGE) => {
+                self.cmp_greater_equal();
+            },
+            BcArr::I(Instr::CmpEq) => {
+                self.cmp_equals();
             },
             _ => { panic!("Instruction not implemented in vm: {:?}", instr); },
         }
@@ -162,7 +192,7 @@ impl Interpreter {
 
     /// LoadP instruction
     fn loadp(&mut self) {
-        let reg  = self.fetch_val();
+        let _reg  = self.fetch_val();
         let pool = self.fetch_val();
 
         let pool_index = Interpreter::unpack_pool(pool);
@@ -173,7 +203,7 @@ impl Interpreter {
 
     /// LoadP instruction
     fn loadc(&mut self) {
-        let reg  = self.fetch_val();
+        let _reg  = self.fetch_val();
         let cpool = self.fetch_val();
 
         let cpool_index = Interpreter::unpack_cpool(cpool);
@@ -184,6 +214,23 @@ impl Interpreter {
         self.regs.push(val.clone());
     }
 
+    /// Jmp if flag is set
+    fn jmp_if(&mut self) {
+        let offset = Interpreter::unpack_vaddr(self.fetch_val());
+
+        if self.flag {
+            self.ip += offset;
+        }
+        self.flag = false;
+    }
+
+    /// Unconditional jmp
+    fn jmp_unconditional(&mut self) {
+        let offset = Interpreter::unpack_vaddr(self.fetch_val());
+
+        self.ip += offset;
+    }
+
     /// Print instruction
     fn print(&mut self) {
         let reg = self.fetch_val();
@@ -192,10 +239,10 @@ impl Interpreter {
 
         match val {
             Value::Number(v) => {
-                println!("{}", v);
+                print!("{}", v);
             },
             Value::StringLiteral(v) => {
-                println!("{}", v);
+                print!("{}", v);
             },
             _ => { panic!("Type not implemented in print: {:#?}", val); },
         }
@@ -280,6 +327,106 @@ impl Interpreter {
             let result = v1 / v2;
 
             self.regs.push(Value::Number(result));
+        }
+    }
+
+    /// Less instruction
+    fn cmp_less_than(&mut self) {
+        let _res = Interpreter::unpack_register(self.fetch_val());
+        let r1   = Interpreter::unpack_register(self.fetch_val());
+        let r2   = Interpreter::unpack_register(self.fetch_val());
+        
+        // if both r1 and r2 hold numbers
+        if Interpreter::check_num(&self.regs[r1]) && 
+            Interpreter::check_num(&self.regs[r2]) {
+            let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
+            let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
+            let result = v1 > v2;
+            if result { self.flag = true; }
+
+            self.regs.push(Value::Bool(result));
+        } else {
+            panic!("Both values for 'less' operator need to be numbers");
+        }
+    }
+
+    /// LessEq instruction
+    fn cmp_less_equal(&mut self) {
+        let _res = Interpreter::unpack_register(self.fetch_val());
+        let r1   = Interpreter::unpack_register(self.fetch_val());
+        let r2   = Interpreter::unpack_register(self.fetch_val());
+        
+        // if both r1 and r2 hold numbers
+        if Interpreter::check_num(&self.regs[r1]) && 
+            Interpreter::check_num(&self.regs[r2]) {
+            let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
+            let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
+            let result = v1 <= v2;
+            if result { self.flag = true; }
+
+            self.regs.push(Value::Bool(result));
+        } else {
+            panic!("Both values for 'less_eq' operator need to be numbers");
+        }
+    }
+
+    /// Greater instruction
+    fn cmp_greater_than(&mut self) {
+        let _res = Interpreter::unpack_register(self.fetch_val());
+        let r1   = Interpreter::unpack_register(self.fetch_val());
+        let r2   = Interpreter::unpack_register(self.fetch_val());
+        
+        // if both r1 and r2 hold numbers
+        if Interpreter::check_num(&self.regs[r1]) && 
+            Interpreter::check_num(&self.regs[r2]) {
+            let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
+            let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
+            let result = v1 > v2;
+            if result { self.flag = true; }
+
+            self.regs.push(Value::Bool(result));
+        } else {
+            panic!("Both values for 'greater' operator need to be numbers");
+        }
+    }
+
+    /// GreaterEq instruction
+    fn cmp_greater_equal(&mut self) {
+        let _res = Interpreter::unpack_register(self.fetch_val());
+        let r1   = Interpreter::unpack_register(self.fetch_val());
+        let r2   = Interpreter::unpack_register(self.fetch_val());
+        
+        // if both r1 and r2 hold numbers
+        if Interpreter::check_num(&self.regs[r1]) && 
+            Interpreter::check_num(&self.regs[r2]) {
+            let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
+            let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
+            let result = v1 >= v2;
+            if result { self.flag = true; }
+
+            self.regs.push(Value::Bool(result));
+        } else {
+            panic!("Both values for 'greater_eq' operator need to be numbers");
+        }
+    }
+
+    /// Equals instruction
+    fn cmp_equals(&mut self) {
+        let _res = Interpreter::unpack_register(self.fetch_val());
+        let r1  = Interpreter::unpack_register(self.fetch_val());
+        let r2  = Interpreter::unpack_register(self.fetch_val());
+        
+        // if both r1 and r2 hold numbers
+        if Interpreter::check_num(&self.regs[r1]) && 
+            Interpreter::check_num(&self.regs[r2]) {
+            let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
+            let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
+            let result = v1 == v2;
+            if result == true { self.flag = true; }
+
+            self.regs.push(Value::Bool(result));
+        } else {
+            panic!("'equals' not yet implemented for non-numbers");
         }
     }
 }

@@ -360,7 +360,7 @@ impl Parser {
     fn comparison(&mut self) -> Result<Expr, Error> {
         let mut expr = self.term()?;
 
-        while self.match_tokens(&[Greater, GreaterEqual, Less, LessEqual]) {
+        while self.match_tokens(&[Greater, GreaterEq, Less, LessEq]) {
             let op = self.previous().clone();
             let right = self.term()?;
             expr = Expr::Binary {
