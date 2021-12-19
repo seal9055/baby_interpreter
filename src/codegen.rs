@@ -14,7 +14,7 @@ pub enum Value {
     Reg(u16),
     Pool(u16),
     CPool(usize),
-    VAddr(usize),
+    VAddr(isize),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -242,7 +242,7 @@ impl Codegen {
             Stmt::Block(s)        => { self.block(s);   },
             Stmt::If(expr, t, f)  => { self.if_stmt(expr, t, f); },
             Stmt::Return(_)       => { panic!("RETURN"); },
-            Stmt::While(_,_)      => { panic!("WHILE"); },
+            Stmt::While(e,b)      => { self.while_stmt(e, b); },
             Stmt::Print(e)        => { self.print(e);         },
         }
     }
@@ -294,7 +294,6 @@ impl Codegen {
         let tmp = self.reg_counter;
 
         let offset1 = self.bytecode.len() + 1;
-        println!("offset: {:?}", offset1);
 
         self.emit_instr(BcArr::I(Instr::JmpIf), 
                         BcArr::V(Value::VAddr(0)), 
@@ -312,15 +311,45 @@ impl Codegen {
                         BcArr::V(Value::Nil), 
                         BcArr::V(Value::Nil));
 
-        let jmp_1: usize = self.bytecode.len() - offset1 - 1;
+        let jmp_1: isize = (self.bytecode.len() - offset1 - 1) as isize;
 
         self.reg_counter = tmp;
         self.interpret_node(&*t);
 
-        let jmp_2: usize = self.bytecode.len() - offset2 - 1;
+        let jmp_2: isize = (self.bytecode.len() - offset2 - 1) as isize;
 
         self.bytecode[offset1] = BcArr::V(Value::VAddr(jmp_1));
         self.bytecode[offset2] = BcArr::V(Value::VAddr(jmp_2));
+    }
+
+    /// Interpret while statements
+    fn while_stmt(&mut self, expr: Expr, b: Box<Stmt>) -> () {
+        let tmp = self.reg_counter;
+        let offset = self.bytecode.len() + 1;
+
+        self.emit_instr(BcArr::I(Instr::JmpUc), 
+                        BcArr::V(Value::VAddr(0)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Nil));
+
+        //let loop_start: usize = self.bytecode.len();
+
+        self.interpret_node(&*b);
+
+        self.reg_counter = tmp;
+        self.expression(expr);
+
+        let jmp1: isize = (self.bytecode.len() - offset + 1) as isize;
+
+        //let x = -(self.bytecode.len() + 2 - loop_start) as isize;
+        self.emit_instr(BcArr::I(Instr::JmpIf), 
+                        BcArr::V(Value::VAddr(-jmp1)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Nil));
+
+        let jmp2: isize = (self.bytecode.len() - offset - 1) as isize;
+
+        self.bytecode[offset] = BcArr::V(Value::VAddr(jmp2-12));
     }
 
     /// Builtins, currently only supports print
@@ -384,25 +413,25 @@ impl Codegen {
                             BcArr::V(Value::Reg(res))); 
                     },
                     Less        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpGT), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    LessEq        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpGE), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Greater        => { 
                         self.emit_instr(BcArr::I(Instr::CmpLT), 
                             BcArr::V(Value::Reg(r1)), 
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 
                     },
-                    GreaterEq        => { 
+                    LessEq        => { 
                         self.emit_instr(BcArr::I(Instr::CmpLE), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    Greater        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpGT), 
+                            BcArr::V(Value::Reg(r1)), 
+                            BcArr::V(Value::Reg(r2)), 
+                            BcArr::V(Value::Reg(res))); 
+                    },
+                    GreaterEq        => { 
+                        self.emit_instr(BcArr::I(Instr::CmpGE), 
                             BcArr::V(Value::Reg(r1)), 
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 

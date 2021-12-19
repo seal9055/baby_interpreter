@@ -63,6 +63,15 @@ impl Interpreter {
         self.bytecode[self.ip-1].clone()
     }
 
+    /// Inserts value into specified register
+    fn register_insert(&mut self, regid: usize, val: Value) {
+        if self.regs.len() > regid {
+            self.regs[regid] = val.clone();
+        } else {
+            self.regs.push(val.clone());
+        }
+    }
+
     /// Unpacks a register from the BcArr enum
     fn unpack_register(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Reg(c)) => c) as usize
@@ -165,13 +174,13 @@ impl Interpreter {
 
     /// Loadi instruction
     fn loadi(&mut self) {
-        let _reg = self.fetch_val();
-        let val = self.fetch_val();
+        let reg = self.fetch_val();
+        let v   = self.fetch_val();
 
-        //let register_index = Interpreter::unpack_register(reg);
-        let value = Interpreter::unpack_value(val);
+        let register_index = Interpreter::unpack_register(reg);
+        let val = Interpreter::unpack_value(v);
 
-        self.regs.push(value);
+        self.register_insert(register_index, val);
     }
 
     /// PushP instruction
@@ -192,43 +201,45 @@ impl Interpreter {
 
     /// LoadP instruction
     fn loadp(&mut self) {
-        let _reg  = self.fetch_val();
+        let reg  = self.fetch_val();
         let pool = self.fetch_val();
 
+        let register_index = Interpreter::unpack_register(reg);
         let pool_index = Interpreter::unpack_pool(pool);
-        let val = &self.local_pool[pool_index];
+        let val = self.local_pool[pool_index].clone();
 
-        self.regs.push(val.clone());
+        self.register_insert(register_index, val);
     }
 
     /// LoadP instruction
     fn loadc(&mut self) {
-        let _reg  = self.fetch_val();
+        let reg  = self.fetch_val();
         let cpool = self.fetch_val();
 
+        let register_index = Interpreter::unpack_register(reg);
         let cpool_index = Interpreter::unpack_cpool(cpool);
+        let val = self.const_pool[cpool_index].clone();
 
-        let val = &self.const_pool[cpool_index];
-        //println!("Value is: {:?}", val);
-
-        self.regs.push(val.clone());
+        self.register_insert(register_index, val);
     }
 
     /// Jmp if flag is set
     fn jmp_if(&mut self) {
-        let offset = Interpreter::unpack_vaddr(self.fetch_val());
+        let offset: isize = (Interpreter::unpack_vaddr(self.fetch_val())) as isize;
+        let mut fake_ip: isize = self.ip as isize;
 
         if self.flag {
-            self.ip += offset;
+            fake_ip += offset;
+            self.ip = fake_ip as usize;
         }
-        self.flag = false;
     }
 
     /// Unconditional jmp
     fn jmp_unconditional(&mut self) {
-        let offset = Interpreter::unpack_vaddr(self.fetch_val());
-
-        self.ip += offset;
+        let offset: isize = (Interpreter::unpack_vaddr(self.fetch_val())) as isize;
+        let mut fake_ip: isize = self.ip as isize;
+        fake_ip += offset;
+        self.ip = fake_ip as usize;
     }
 
     /// Print instruction
@@ -239,10 +250,10 @@ impl Interpreter {
 
         match val {
             Value::Number(v) => {
-                print!("{}", v);
+                println!("{}", v);
             },
             Value::StringLiteral(v) => {
-                print!("{}", v);
+                println!("{}", v);
             },
             _ => { panic!("Type not implemented in print: {:#?}", val); },
         }
@@ -250,10 +261,10 @@ impl Interpreter {
 
     /// Add instruction
     fn add(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res = Interpreter::unpack_register(self.fetch_val());
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
-        
+
         // if both r1 and r2 hold numbers
         if Interpreter::check_num(&self.regs[r1]) && 
             Interpreter::check_num(&self.regs[r2]) {
@@ -261,27 +272,27 @@ impl Interpreter {
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 + v2;
 
-            self.regs.push(Value::Number(result));
+            self.register_insert(res, Value::Number(result));
         } else if Interpreter::check_num(&self.regs[r1]) &&
             Interpreter::check_str(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: &str = Interpreter::unpack_string(&self.regs[r2]);
             let result: String = v1.to_string() + &v2;
 
-            self.regs.push(Value::StringLiteral(result));
-            } else if Interpreter::check_str(&self.regs[r1]) &&
+            self.register_insert(res, Value::StringLiteral(result));
+        } else if Interpreter::check_str(&self.regs[r1]) &&
             Interpreter::check_num(&self.regs[r2]) {
             let v1: &str = Interpreter::unpack_string(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result: String = v1.to_string() + &v2.to_string();
 
-            self.regs.push(Value::StringLiteral(result));
+            self.register_insert(res, Value::StringLiteral(result));
             }
     }
 
     /// Sub instruction
     fn sub(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res = Interpreter::unpack_register(self.fetch_val());
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
@@ -292,13 +303,13 @@ impl Interpreter {
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 - v2;
 
-            self.regs.push(Value::Number(result));
+            self.register_insert(res, Value::Number(result));
         }
     }
 
     /// Mul instruction
     fn mul(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res = Interpreter::unpack_register(self.fetch_val());
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
@@ -309,13 +320,13 @@ impl Interpreter {
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 * v2;
 
-            self.regs.push(Value::Number(result));
+            self.register_insert(res, Value::Number(result));
         }
     }
 
     /// Div instruction
     fn div(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res = Interpreter::unpack_register(self.fetch_val());
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
@@ -326,13 +337,13 @@ impl Interpreter {
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 / v2;
 
-            self.regs.push(Value::Number(result));
+            self.register_insert(res, Value::Number(result));
         }
     }
 
     /// Less instruction
     fn cmp_less_than(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res  = Interpreter::unpack_register(self.fetch_val());
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
@@ -341,10 +352,9 @@ impl Interpreter {
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
-            let result = v1 > v2;
-            if result { self.flag = true; }
+            self.flag = v1 < v2;
 
-            self.regs.push(Value::Bool(result));
+            self.register_insert(res, Value::Bool(self.flag));
         } else {
             panic!("Both values for 'less' operator need to be numbers");
         }
@@ -352,7 +362,7 @@ impl Interpreter {
 
     /// LessEq instruction
     fn cmp_less_equal(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res  = Interpreter::unpack_register(self.fetch_val());
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
@@ -361,10 +371,9 @@ impl Interpreter {
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
-            let result = v1 <= v2;
-            if result { self.flag = true; }
+            self.flag = v1 <= v2;
 
-            self.regs.push(Value::Bool(result));
+            self.register_insert(res, Value::Bool(self.flag));
         } else {
             panic!("Both values for 'less_eq' operator need to be numbers");
         }
@@ -372,7 +381,7 @@ impl Interpreter {
 
     /// Greater instruction
     fn cmp_greater_than(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res  = Interpreter::unpack_register(self.fetch_val());
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
@@ -381,10 +390,9 @@ impl Interpreter {
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
-            let result = v1 > v2;
-            if result { self.flag = true; }
+            self.flag = v1 > v2;
 
-            self.regs.push(Value::Bool(result));
+            self.register_insert(res, Value::Bool(self.flag));
         } else {
             panic!("Both values for 'greater' operator need to be numbers");
         }
@@ -392,7 +400,7 @@ impl Interpreter {
 
     /// GreaterEq instruction
     fn cmp_greater_equal(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res  = Interpreter::unpack_register(self.fetch_val());
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
@@ -401,10 +409,9 @@ impl Interpreter {
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
-            let result = v1 >= v2;
-            if result { self.flag = true; }
+            self.flag = v1 >= v2;
 
-            self.regs.push(Value::Bool(result));
+            self.register_insert(res, Value::Bool(self.flag));
         } else {
             panic!("Both values for 'greater_eq' operator need to be numbers");
         }
@@ -412,7 +419,7 @@ impl Interpreter {
 
     /// Equals instruction
     fn cmp_equals(&mut self) {
-        let _res = Interpreter::unpack_register(self.fetch_val());
+        let res = Interpreter::unpack_register(self.fetch_val());
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
@@ -421,10 +428,9 @@ impl Interpreter {
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
-            let result = v1 == v2;
-            if result == true { self.flag = true; }
+            self.flag = v1 == v2;
 
-            self.regs.push(Value::Bool(result));
+            self.register_insert(res, Value::Bool(self.flag));
         } else {
             panic!("'equals' not yet implemented for non-numbers");
         }
