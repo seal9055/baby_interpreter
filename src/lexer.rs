@@ -1,37 +1,40 @@
 use crate::tokens::TokenType::*;
 use crate::tokens::{Token, TokenType};
 
-pub fn is_keyword(word: &str) -> bool {
+/// Returns true if the name is a valid keyword
+fn is_keyword(word: &str) -> bool {
     match word {
         "and" | "else" | "false" | "function" | "for" |
-        "if" | "nil" | "or" | "print" | "return" | "this" | 
-        "true" | "var" | "let" | "while" => true,
+        "if" | "nil" | "or" | "return" | "this" | 
+        "true" | "var" | "let" | "while" | "console.log" => true,
         _ => false,
     }
 }
 
-pub fn get_keyword(word: &str) -> TokenType {
+/// Returns correct token for provided keyword
+fn get_keyword(word: &str) -> TokenType {
     match word {
-        "and" => And,
-        "else" => Else,
-        "false" => False,
-        "function" => Function,
-        "for" => For,
-        "if" => If,
-        "nil" => Nil,
-        "or" => Or,
-        "print" => Print,
-        "return" => Return,
-        "this" => This,
-        "true" => True,
-        "var" => Var,
-        "let" => Let,
-        "while" => While,
-        _ => Whitespace
+        "and"         => And,
+        "else"        => Else,
+        "false"       => False,
+        "function"    => Function,
+        "for"         => For,
+        "if"          => If,
+        "nil"         => Nil,
+        "or"          => Or,
+        "console.log" => Print,
+        "return"      => Return,
+        "this"        => This,
+        "true"        => True,
+        "var"         => Var,
+        "let"         => Let,
+        "while"       => While,
+        _             => Whitespace
     }
 }
 
-pub fn is_digit(c: char) -> bool {
+/// Returns true if c == number
+fn is_digit(c: char) -> bool {
     match c {
         '0'..='9' => {
             return true;
@@ -200,7 +203,8 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                 end_token(&mut cur_token, &mut tokens);
                 cur_token.value.push(c);
                 cur_token.t_type = Identifier;
-                while char::is_alphanumeric(*lexer.peek().unwrap()) {
+                while char::is_alphanumeric(*lexer.peek().unwrap()) || 
+                        *lexer.peek().unwrap() == '.' {
                     let d = lexer.next().unwrap();
                     cur_token.value.push(d);
                 }

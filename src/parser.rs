@@ -55,6 +55,7 @@ impl Parser {
         return self.peek().line_num;
     }
 
+    /// Consume a token if it has the correct type and advance the parser
     fn consume(&mut self, t_type: TokenType, msg: &str, l: u32) 
             -> Result<Token, Error> {
         if self.check(t_type) {
@@ -64,6 +65,8 @@ impl Parser {
         }
     }
 
+    /// Parse the program, and return either a vector of statements if the
+    /// parsing is successful or a vector of errors containing all found errors
     pub fn parse(&mut self) -> Result<Vec<Stmt>, Vec<Error>> {
         let mut stmts:  Vec<Stmt> = Vec::new();
         let mut errors: Vec<Error> = Vec::new();
@@ -132,7 +135,6 @@ impl Parser {
     fn var_decl(&mut self) -> Result<Stmt, Error> {
         let var_name = self.consume(Identifier, "Expected var name", 
                                     self.lc())?;
-        //println!("Variable Name: {:#?}", var_name);
         let mut initializer: Option<Expr> = None; 
 
         // Parse variable initialization using equal sign
@@ -147,11 +149,9 @@ impl Parser {
         Ok(Stmt::Variable(var_name, initializer))
     }
 
-    /// TODO
     fn let_decl(&mut self) -> Result<Stmt, Error> {
         let var_name = self.consume(Identifier, "Expected var name", 
                                     self.lc())?;
-        //println!("Variable Name: {:#?}", var_name);
         let mut initializer: Option<Expr> = None; 
 
         // Parse variable initialization using equal sign
@@ -200,7 +200,6 @@ impl Parser {
             stmts.push(self.declaration()?);
         }
         self.consume(CloseCurly, "Expected '}' after block.", self.lc())?;
-        //println!("Block Debug: {:#?}", stmts);
         Ok(Stmt::Block(stmts))
     }
 
@@ -280,7 +279,6 @@ impl Parser {
 
     fn expr_statement(&mut self) -> Result<Stmt, Error> {
         let expr = self.expression()?;
-        //println!("expression: {:#?}", expr);
         self.consume(SemiColon, "Expected a ';' after expression", self.lc())?;
         Ok(Stmt::Expression(expr))
     }
@@ -323,7 +321,6 @@ impl Parser {
                 r_expr: Box::new(right),
             };
         }
-        //println!("From or, result: {:#?}", expr);
         Ok(expr)
     }
 
@@ -337,7 +334,6 @@ impl Parser {
                 r_expr: Box::new(right),
             };
         }
-        //println!("From and, result: {:#?}", expr);
         Ok(expr)
     }
     
@@ -353,7 +349,6 @@ impl Parser {
                 right: Box::new(right),
             };
         }
-        //println!("From equality, result: {:#?}", expr);
         Ok(expr)
     }
 
@@ -420,7 +415,6 @@ impl Parser {
         if self.match_tokens(&[OpenParen]) {
             expr = self.finish_call(expr)?;
         }
-        //println!("From call, result: {:#?}", expr);
         Ok(expr)
     }
 
@@ -479,6 +473,6 @@ impl Parser {
 
         self.next();
         Err(Error::new(format!("Error on line: {} at token: {}", 
-                        self.peek().line_num, self.previous().value), self.lc()))
+                    self.peek().line_num, self.previous().value), self.lc()))
     }
 }

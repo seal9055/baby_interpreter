@@ -1,5 +1,5 @@
 function main(y) {
-	print(y);
+	console.log(y);
 }
 
 main(3);

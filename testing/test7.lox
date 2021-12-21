@@ -1,4 +1,0 @@
-var str = "hello";
-print str;
-str = "hi";
-print str;

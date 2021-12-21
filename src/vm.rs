@@ -46,18 +46,16 @@ pub struct Interpreter {
 impl Interpreter {
 
     /// Returns new interpreter object
-    //pub fn new(bytecode: Vec<BcArr>, const_pool: Vec<Value>, entry_point: usize) 
-    pub fn new(program: Program) 
-            -> Self {
+    pub fn new(program: Program) -> Self {
         Self {
             bytecode: program.bytecode,
-            const_pool: program.const_pool,
             ip: program.entry_point,
-            function_list: program.function_list,
             regs: Vec::new(),
+            local_pool: Vec::new(),
+            function_list: program.function_list,
+            const_pool: program.const_pool,
             args: Vec::new(),
             call_stack: Vec::new(),
-            local_pool: Vec::new(),
             flag: false,
         }
     }
@@ -65,6 +63,9 @@ impl Interpreter {
     /// Convert ast into bytecodearray
     pub fn interpret(&mut self) -> () {
         let len = self.bytecode.len();
+        // Initialize r0 since it is exclusively used as return value for 
+        // functions so other operations do not attempt to use it.
+        self.regs.push(Value::Number(0.0));
 
         while self.ip < len {
             self.execute_instr();
@@ -77,7 +78,7 @@ impl Interpreter {
         self.bytecode[self.ip-1].clone()
     }
 
-    /// Inserts value into specified register
+    /// Inserts value into specified register vector slot
     fn register_insert(&mut self, regid: usize, val: Value) {
         if self.regs.len() > regid {
             self.regs[regid] = val.clone();
@@ -86,7 +87,7 @@ impl Interpreter {
         }
     }
 
-    /// Inserts value into specified pool_slot
+    /// Inserts value into specified local pool vector slot
     fn pool_insert(&mut self, index: usize, val: Value) {
         if self.local_pool.len() > index {
             self.local_pool[index] = val.clone();
@@ -95,7 +96,7 @@ impl Interpreter {
         }
     }
 
-    /// Inserts value into specified pool_slot
+    /// Inserts value into specified argument vector slot
     fn args_insert(&mut self, index: usize, val: Value) {
         if self.args.len() > index {
             self.args[index] = val.clone();
@@ -114,7 +115,7 @@ impl Interpreter {
         extract_enum_value!(val, BcArr::V(c) => c)
     }
 
-    /// Unpacks a pool_index from the BcArr enum
+    /// Unpacks a local pool index from the BcArr enum
     fn unpack_pool(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Pool(c)) => c) as usize
     }
@@ -129,7 +130,7 @@ impl Interpreter {
         extract_enum_value!(arg, BcArr::V(Value::Arg(c)) => c) as usize
     }
 
-    /// Unpacks a pool_index from the BcArr enum
+    /// Unpacks a constant pool index from the BcArr enum
     fn unpack_cpool(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::CPool(c)) => c) as usize
     }
@@ -139,7 +140,7 @@ impl Interpreter {
         *extract_enum_value!(num, Value::Number(c) => c)
     }
 
-    /// Unpacks a number from the Value enum
+    /// Unpacks a String from the Value enum
     fn unpack_string(val: &Value) -> &str {
         extract_enum_value!(val, Value::StringLiteral(c) => c)
     }
@@ -154,16 +155,20 @@ impl Interpreter {
         matches!(v, Value::StringLiteral(_)) 
     }
 
-    /// Switch to determine the instruction and execute the appropriate function
+    /// Decode instruction and execute an appropriate function
     fn execute_instr(&mut self) {
         let instr = self.fetch_val();
-        //println!("{}  {:?}", self.ip, instr);
         match instr { 
             BcArr::I(Instr::LoadI) => {
                 self.loadi();
-            }, BcArr::I(Instr::PushP) => {
+            },
+            BcArr::I(Instr::LoadR) => {
+                self.loadr();
+            }, 
+            BcArr::I(Instr::PushP) => {
                 self.pushp();
-            }, BcArr::I(Instr::PushA) => {
+            }, 
+            BcArr::I(Instr::PushA) => {
                 self.pusha();
             },
             BcArr::I(Instr::LoadP) => {
@@ -175,10 +180,10 @@ impl Interpreter {
             BcArr::I(Instr::LoadC) => {
                 self.loadc();
             },
-            BcArr::I(Instr::Jmp) => {
-                self.jmp_unconditional();
+            BcArr::I(Instr::Jmp)   => {
+                self.jmp();
             },
-            BcArr::I(Instr::Call) => {
+            BcArr::I(Instr::Call)  => {
                 self.function_call();
             },
             BcArr::I(Instr::JmpIf) => {
@@ -187,16 +192,16 @@ impl Interpreter {
             BcArr::I(Instr::Print) => {
                 self.print();
             },
-            BcArr::I(Instr::Add) => {
+            BcArr::I(Instr::Add)   => {
                 self.add();
             },
-            BcArr::I(Instr::Sub) => {
+            BcArr::I(Instr::Sub)   => {
                 self.sub();
             },
-            BcArr::I(Instr::Mul) => {
+            BcArr::I(Instr::Mul)   => {
                 self.mul();
             },
-            BcArr::I(Instr::Div) => {
+            BcArr::I(Instr::Div)   => {
                 self.div();
             },
             BcArr::I(Instr::CmpLT) => {
@@ -214,14 +219,15 @@ impl Interpreter {
             BcArr::I(Instr::CmpEq) => {
                 self.cmp_equals();
             },
-            BcArr::I(Instr::Ret) => {
+            BcArr::I(Instr::Ret)   => {
                 self.ret();
             },
-            _ => { panic!("Instruction not implemented in vm: {:?}", instr); },
+            _ => { panic!("Runtime Error: Instruction not implemented in vm: \
+                          {:?} at IP={}", instr, self.ip); },
         }
     }
 
-    /// Loadi instruction
+    /// Loadi instruction - Loads an immediate value into a register
     fn loadi(&mut self) {
         let reg = self.fetch_val();
         let v   = self.fetch_val();
@@ -232,7 +238,19 @@ impl Interpreter {
         self.register_insert(register_index, val);
     }
 
-    /// PushP instruction
+    /// Loadr instruction - Loads value from one register into another
+    fn loadr(&mut self) {
+        let dst = self.fetch_val();
+        let src = self.fetch_val();
+
+        let dst_index = Interpreter::unpack_register(dst);
+        let src_index = Interpreter::unpack_register(src);
+        let val = self.regs[src_index].clone();
+
+        self.register_insert(dst_index, val);
+    }
+
+    /// PushP instruction - Push value from register into local pool
     fn pushp(&mut self) {
         let pool = self.fetch_val();
         let reg  = self.fetch_val();
@@ -244,7 +262,7 @@ impl Interpreter {
         self.pool_insert(pool_index, val);
     }
 
-    /// PushA instruction
+    /// PushA instruction - Push value from register into argument register
     fn pusha(&mut self) {
         let arg = self.fetch_val();
         let reg = self.fetch_val();
@@ -256,7 +274,7 @@ impl Interpreter {
         self.args_insert(args_index, val);
     }
 
-    /// LoadP instruction
+    /// LoadP instruction - Load value from local pool into a register
     fn loadp(&mut self) {
         let reg  = self.fetch_val();
         let pool = self.fetch_val();
@@ -268,7 +286,7 @@ impl Interpreter {
         self.register_insert(register_index, val);
     }
 
-    /// LoadA instruction
+    /// LoadA instruction - Load value from an argument register into register
     fn loada(&mut self) {
         let pool  = self.fetch_val();
         let arg   = self.fetch_val();
@@ -280,7 +298,7 @@ impl Interpreter {
         self.pool_insert(pool_index, val);
     }
 
-    /// LoadP instruction
+    /// LoadC instruction - Load value from constant pool into a register
     fn loadc(&mut self) {
         let reg  = self.fetch_val();
         let cpool = self.fetch_val();
@@ -292,7 +310,7 @@ impl Interpreter {
         self.register_insert(register_index, val);
     }
 
-    /// Jmp if flag is set
+    /// Jmp if flag is set - Adds VAddr offset to IP
     fn jmp_if(&mut self) {
         let offset: isize = (Interpreter::unpack_vaddr(self.fetch_val())) as isize;
         let mut fake_ip: isize = self.ip as isize;
@@ -303,22 +321,22 @@ impl Interpreter {
         }
     }
 
-    /// Unconditional jmp
-    fn jmp_unconditional(&mut self) {
+    /// Unconditional jmp - Adds VAddr offset to IP
+    fn jmp(&mut self) {
         let offset: isize = (Interpreter::unpack_vaddr(self.fetch_val())) as isize;
         let mut fake_ip: isize = self.ip as isize;
         fake_ip += offset;
         self.ip = fake_ip as usize;
     }
 
-    /// Function Call
+    /// Function Call - set IP to specified VAddr
     fn function_call(&mut self) {
         self.call_stack.push(self.ip + 1);
         let ip: usize = Interpreter::unpack_vaddr(self.fetch_val());
         self.ip = ip;
     }
 
-    /// Return from function
+    /// Return from function by retrieving a value from callstack
     fn ret(&mut self) {
         self.ip = self.call_stack.pop().unwrap();
     }
@@ -336,7 +354,14 @@ impl Interpreter {
             Value::StringLiteral(v) => {
                 println!("{}", v);
             },
-            _ => { panic!("Type not implemented in print: {:#?}", val); },
+            Value::Bool(v) => {
+                println!("{}", v);
+            },
+            Value::Nil => {
+                println!("NIL");
+            },
+            _ => { panic!("Runtime Error: Type not implemented in print: {:#?} \
+                          at IP={}.", val, self.ip); },
         }
     }
 
@@ -346,29 +371,38 @@ impl Interpreter {
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
 
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 + v2;
 
             self.register_insert(res, Value::Number(result));
-        } else if Interpreter::check_num(&self.regs[r1]) &&
+        } else if Interpreter::check_num(&self.regs[r1]) && // num & str
             Interpreter::check_str(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: &str = Interpreter::unpack_string(&self.regs[r2]);
             let result: String = v1.to_string() + &v2;
 
             self.register_insert(res, Value::StringLiteral(result));
-        } else if Interpreter::check_str(&self.regs[r1]) &&
+        } else if Interpreter::check_str(&self.regs[r1]) && // str & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: &str = Interpreter::unpack_string(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result: String = v1.to_string() + &v2.to_string();
 
             self.register_insert(res, Value::StringLiteral(result));
-            }
+        } else if Interpreter::check_str(&self.regs[r1]) && // str & str
+            Interpreter::check_str(&self.regs[r2]) {
+            let v1: &str = Interpreter::unpack_string(&self.regs[r1]);
+            let v2: &str = Interpreter::unpack_string(&self.regs[r2]);
+            let result: String = v1.to_string() + &v2.to_string();
+
+            self.register_insert(res, Value::StringLiteral(result));
+        } else {
+            panic!("Runtime Error: Add operation not supported for the \
+                specified operands at IP={}.", self.ip);
+        }
     }
 
     /// Sub instruction
@@ -377,14 +411,16 @@ impl Interpreter {
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 - v2;
 
             self.register_insert(res, Value::Number(result));
+        } else {
+            panic!("Runtime Error: Sub operation not supported for the \
+                specified operands at IP={}.", self.ip);
         }
     }
 
@@ -394,14 +430,16 @@ impl Interpreter {
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 * v2;
 
             self.register_insert(res, Value::Number(result));
+        } else {
+            panic!("Runtime Error: Mul operation not supported for the \
+                specified operands at IP={}.", self.ip);
         }
     }
 
@@ -411,14 +449,16 @@ impl Interpreter {
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             let result = v1 / v2;
 
             self.register_insert(res, Value::Number(result));
+        } else {
+            panic!("Runtime Error: Div operation not supported for the \
+                specified operands at IP={}.", self.ip);
         }
     }
 
@@ -428,8 +468,7 @@ impl Interpreter {
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
@@ -437,7 +476,8 @@ impl Interpreter {
 
             self.register_insert(res, Value::Bool(self.flag));
         } else {
-            panic!("Both values for 'less' operator need to be numbers");
+            panic!("Runtime Error: Both values for 'less than' operation need \
+                   to be numbers at IP={}.", self.ip);
         }
     }
 
@@ -447,8 +487,7 @@ impl Interpreter {
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
@@ -456,7 +495,8 @@ impl Interpreter {
 
             self.register_insert(res, Value::Bool(self.flag));
         } else {
-            panic!("Both values for 'less_eq' operator need to be numbers");
+            panic!("Runtime Error: Both values for 'less than equal' operation \
+                    need to be numbers at IP={}.", self.ip);
         }
     }
 
@@ -466,8 +506,7 @@ impl Interpreter {
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
@@ -475,7 +514,8 @@ impl Interpreter {
 
             self.register_insert(res, Value::Bool(self.flag));
         } else {
-            panic!("Both values for 'greater' operator need to be numbers");
+            panic!("Runtime Error: Both values for 'greater than' operation \
+                    need to be numbers at IP={}.", self.ip);
         }
     }
 
@@ -485,8 +525,7 @@ impl Interpreter {
         let r1   = Interpreter::unpack_register(self.fetch_val());
         let r2   = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
-        if Interpreter::check_num(&self.regs[r1]) && 
+        if Interpreter::check_num(&self.regs[r1]) && // num & num
             Interpreter::check_num(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
@@ -494,7 +533,8 @@ impl Interpreter {
 
             self.register_insert(res, Value::Bool(self.flag));
         } else {
-            panic!("Both values for 'greater_eq' operator need to be numbers");
+            panic!("Runtime Error: Both values for 'greater than equal' \
+                   operation need to be numbers at IP={}.", self.ip);
         }
     }
 
@@ -504,16 +544,37 @@ impl Interpreter {
         let r1  = Interpreter::unpack_register(self.fetch_val());
         let r2  = Interpreter::unpack_register(self.fetch_val());
         
-        // if both r1 and r2 hold numbers
         if Interpreter::check_num(&self.regs[r1]) && 
-            Interpreter::check_num(&self.regs[r2]) {
+            Interpreter::check_num(&self.regs[r2]) { // num & num
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
             self.flag = v1 == v2;
 
             self.register_insert(res, Value::Bool(self.flag));
+        } else if Interpreter::check_num(&self.regs[r1]) && // num & str
+            Interpreter::check_str(&self.regs[r2]) {
+            let v1: f64  = Interpreter::unpack_number(&self.regs[r1]);
+            let v2: &str = Interpreter::unpack_string(&self.regs[r2]);
+            self.flag = v1.to_string() == v2;
+
+            self.register_insert(res, Value::Bool(self.flag));
+        } else if Interpreter::check_str(&self.regs[r1]) && // str & num
+            Interpreter::check_num(&self.regs[r2]) {
+            let v1: &str = Interpreter::unpack_string(&self.regs[r1]);
+            let v2: f64 = Interpreter::unpack_number(&self.regs[r2]);
+            self.flag = v1 == v2.to_string();
+
+            self.register_insert(res, Value::Bool(self.flag));
+        } else if Interpreter::check_str(&self.regs[r1]) && // str & str
+            Interpreter::check_str(&self.regs[r2]) {
+            let v1: &str = Interpreter::unpack_string(&self.regs[r1]);
+            let v2: &str = Interpreter::unpack_string(&self.regs[r2]);
+            self.flag = v1 == v2;
+
+            self.register_insert(res, Value::Bool(self.flag));
         } else {
-            panic!("'equals' not yet implemented for non-numbers");
+            panic!("Runtime Error: Add operation not supported for the \
+                specified operands at IP={}.", self.ip);
         }
     }
 }

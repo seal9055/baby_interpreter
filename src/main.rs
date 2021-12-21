@@ -16,10 +16,12 @@ use parser::{Parser};
 use codegen::{Codegen, Value, BcArr, Instr};
 use vm::Interpreter;
 
-const DEBUGSOURCE: bool = true;
-const DEBUGAST: bool = false;
-const DEBUGBYTECODE: bool = true;
+const DEBUGSOURCE: bool   = true;
+const DEBUGTOKENS: bool   = false;
+const DEBUGAST: bool      = false;
+const DEBUGBYTECODE: bool = false;
 
+/// Used to print a line until \n (debug purposes)
 fn print_line(file: String, line: u32) {
     let mut count: u32 = 0;
     print!("\n");
@@ -31,10 +33,13 @@ fn print_line(file: String, line: u32) {
     }
 }
 
-/// Read content from a file into a string and pass that string
-/// to Token::tokenize
+/// Read source code (required syntax is similar to javascript) before passing
+/// the code into the compilation pipeline:
+/// 1. Lexer:       Split the source code into a series of tokens
+/// 2. Parser:      Take the tokens and use them to create an AST
+/// 3. Codegen:     Walk the AST and generate bytecode
+/// 4. Interpreter: Iterate through the bytecode and execute the instructions
 fn main() {
-
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("Please provide your .js file as the sole argument");
@@ -53,7 +58,13 @@ fn main() {
 
     #[allow(unused_mut)]
     let mut tokens = tokenize(&file_string);
-    //println!("Successfuly generated Tokens: \n {:#?}\nEND", tokens);
+
+    if DEBUGTOKENS {
+        println!("\n+-------------Tokens--------------+");
+        for token in tokens.clone() {
+            println!("{:?}", token);
+        }
+    }
     
     let mut parser = Parser::new(tokens);
     let stmts  = match parser.parse() {
@@ -63,7 +74,7 @@ fn main() {
                 print_line(file_string.clone(), e.line);
                 println!("{}\n\n", e.err.bold());
             }
-            println!("{}", "Could not compile program due to errors\n"
+            println!("{}", "Could not compile program due to above errors\n"
                      .red().bold()); 
             return;
         }
@@ -77,7 +88,6 @@ fn main() {
     }
 
     let program = Codegen::bytecode_gen(stmts);
-
     let mut vals = Vec::new();
     for (_, value) in program.clone().function_list.into_iter() {
         vals.push(value);
@@ -120,6 +130,7 @@ fn main() {
         }
         println!("\n+----------------------------------+\n");
     }
+
     let mut vm = Interpreter::new(program);
     vm.interpret();
 }
