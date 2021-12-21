@@ -12,7 +12,7 @@ pub struct Parser {
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
-            tokens: tokens,
+            tokens,
             index: 0,
         }
     }
@@ -38,12 +38,12 @@ impl Parser {
 
     fn match_tokens(&mut self, types: &[TokenType]) -> bool {
         for cur_type in types {
-            if self.check(cur_type.clone()) {
+            if self.check(*cur_type) {
                 self.next();
                 return true
             }
         }
-        return false
+        false
     }
      
     fn check(&self, t_type: TokenType) -> bool {
@@ -299,7 +299,7 @@ impl Parser {
             match expr {
                 Expr::Variable { name, ..} => {
                     return Ok(Expr::Assignment {
-                        name: name,
+                        name,
                         expr: Box::new(value),
                     })
                 },
@@ -407,7 +407,7 @@ impl Parser {
             };
             return Ok(expr);
         }
-        return self.call();
+        self.call()
     }
 
     fn call(&mut self) -> Result<Expr, Error> {

@@ -24,7 +24,7 @@ const DEBUGBYTECODE: bool = false;
 /// Used to print a line until \n (debug purposes)
 fn print_line(file: String, line: u32) {
     let mut count: u32 = 0;
-    print!("\n");
+    println!();
     for c in file.chars() {
         if count == line-1 {
             print!("{}", c);
@@ -43,7 +43,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("Please provide your .js file as the sole argument");
-        return ();
+        return ;
     }
     
     // Get file_name from argv and read the entire file into file_string
@@ -95,7 +95,7 @@ fn main() {
 
     if DEBUGBYTECODE {
         print!("+-----------Bytecode--------------+");
-        for (j, instr) in program.bytecode.clone().iter().enumerate() {
+        for (j, instr) in program.bytecode.iter().enumerate() {
             if vals.contains(&j) {
                 for (key, value) in program.clone().function_list.into_iter() {
                     if value == j { print!("\n\n\t< {} >", key); }
@@ -122,9 +122,9 @@ fn main() {
                 BcArr::V(Value::Nil) => { print!("NIL") },
             } 
         }
-        if program.const_pool.len() > 0 {
+        if !program.const_pool.is_empty() {
             println!("\n+-----------Const-Pool-------------+\n");
-            for (i,c) in program.const_pool.clone().iter().enumerate() {
+            for (i,c) in program.const_pool.iter().enumerate() {
                 println!("[{}] - {:?}", i, c);
             }
         }

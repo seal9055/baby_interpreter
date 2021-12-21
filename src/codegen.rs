@@ -168,8 +168,7 @@ impl Codegen {
     }
 
     /// Emit instructions
-    fn emit_instr(&mut self, instr: BcArr, 
-                  r1: BcArr, r2: BcArr, res: BcArr) -> () {
+    fn emit_instr(&mut self, instr: BcArr, r1: BcArr, r2: BcArr, res: BcArr) {
         // Set entrypoint on first instruction outside of a function/block
         if self.cur_depth == 0 && self.entry_point == None { 
             self.entry_point = Some(self.bytecode.len());
@@ -289,7 +288,7 @@ impl Codegen {
     }
 
     /// Match different kinds of statements
-    fn interpret_node(&mut self, node: &Stmt) -> () {
+    fn interpret_node(&mut self, node: &Stmt) {
         match node.clone() {
             Stmt::Function(n, a, e) => { self.function_decl(n, a, e); },
             Stmt::Expression(e)     => { self.expression(e);          },
@@ -320,7 +319,7 @@ impl Codegen {
     fn get_pool(&mut self, name: &str) -> u16 {
         let arr: Vec<Vars> = self.pool.clone().into_iter()
             .filter(|v| v.name.clone() == name).collect();
-        if arr.len() == 0 { panic!("Runtime Error: Variable does not exist"); }
+        if arr.is_empty() { panic!("Runtime Error: Variable does not exist"); }
         let max = arr.iter().map(|v| v.depth).max().unwrap();
         let index = self.pool.iter().position(|v| v.depth == max 
                                               && v.name == name).unwrap();
@@ -345,10 +344,7 @@ impl Codegen {
                         BcArr::V(Value::Nil), 
                         BcArr::V(Value::Nil));
 
-        match f { // Interpreter false block if it exists
-            Some(x) => { self.interpret_node(&*x); },
-            None    => {},
-        };
+        if let Some(x) = f { self.interpret_node(&*x); }
 
         let offset2 = self.bytecode.len() + 1;
         self.emit_instr(BcArr::I(Instr::Jmp), 
@@ -392,7 +388,7 @@ impl Codegen {
     }
 
     /// Interpret a block of code while maintaining proper scopes
-    fn block(&mut self, stmts: Vec<Stmt>) -> () {
+    fn block(&mut self, stmts: Vec<Stmt>) {
         self.cur_depth += 1;
         for stmt in stmts.iter() {
             self.interpret_node(stmt);
@@ -461,7 +457,7 @@ impl Codegen {
     }
 
     /// Builtins, currently only supports console.log()
-    fn print(&mut self, expr: Expr) ->  () {
+    fn print(&mut self, expr: Expr) {
         let e = self.expression(expr);
         self.emit_instr(BcArr::I(Instr::Print), 
                         BcArr::V(Value::Reg(e)), 
@@ -473,12 +469,12 @@ impl Codegen {
     fn assignment(&mut self, name: Token, expr: Option<Expr>) -> u16 {
         let e = self.expression(expr.unwrap());
         let depth = self.cur_depth;
-        let var = Vars { name: name.value.clone(), depth: depth };
+        let var = Vars { name: name.value.clone(), depth };
 
         if self.pool.contains(&var) { 
             panic!("Runtime Error: Cannot redeclare already existing variable"); 
         }
-        self.pool.push( var.clone() );
+        self.pool.push( var );
         let index: u16 = self.get_pool(&name.value);
         self.emit_instr(BcArr::I(Instr::PushP), 
                         BcArr::V(Value::Reg(e)), 

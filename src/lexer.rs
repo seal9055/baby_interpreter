@@ -3,12 +3,9 @@ use crate::tokens::{Token, TokenType};
 
 /// Returns true if the name is a valid keyword
 fn is_keyword(word: &str) -> bool {
-    match word {
-        "and" | "else" | "false" | "function" | "for" |
-        "if" | "nil" | "or" | "return" | "this" | 
-        "true" | "var" | "let" | "while" | "console.log" => true,
-        _ => false,
-    }
+    matches!(word, "and" | "else" | "false" | "function" | "for" | 
+             "if" | "nil" | "or" | "return" | "this" | 
+             "true" | "var" | "let" | "while" | "console.log")
 }
 
 /// Returns correct token for provided keyword
@@ -37,10 +34,10 @@ fn get_keyword(word: &str) -> TokenType {
 fn is_digit(c: char) -> bool {
     match c {
         '0'..='9' => {
-            return true;
+            true
         },
         _ => { 
-            return false;
+            false
         }
     }
 }
@@ -188,7 +185,7 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                 while is_digit(*lexer.peek().unwrap()) || 
                                *lexer.peek().unwrap() == '.' {
                     if *lexer.peek().unwrap() == '.' {
-                        if is_float == false {
+                        if !is_float {
                             is_float = true;
                         } else { 
                             panic!("2 dots is invalid syntax");
@@ -213,14 +210,13 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                 }
                 end_token(&mut cur_token, &mut tokens);
             },
-            _ => {  ()
-            },
+            _ => {},
         }
     }
     end_token(&mut cur_token, &mut tokens);
     cur_token.t_type = Eof;
     tokens.push(cur_token);
-    return tokens;
+    tokens
 }
 
 /// Terminate a token and add it to the Token vector before

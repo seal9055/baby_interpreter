@@ -1,6 +1,5 @@
 use crate::{ codegen::{Value, Instr, BcArr, Program},
 };
-use std::collections::HashMap;
 
 /// Macro used to extract known enum variants from enums
 #[macro_export]
@@ -27,9 +26,6 @@ pub struct Interpreter {
     /// Holds variables currently in scope
     local_pool: Vec<Value>, 
 
-    /// Holds all declared functions
-    function_list: HashMap<String, usize>,
-
     /// Holds constants
     const_pool: Vec<Value>, 
 
@@ -52,7 +48,6 @@ impl Interpreter {
             ip: program.entry_point,
             regs: Vec::new(),
             local_pool: Vec::new(),
-            function_list: program.function_list,
             const_pool: program.const_pool,
             args: Vec::new(),
             call_stack: Vec::new(),
@@ -61,7 +56,7 @@ impl Interpreter {
     }
 
     /// Convert ast into bytecodearray
-    pub fn interpret(&mut self) -> () {
+    pub fn interpret(&mut self) {
         let len = self.bytecode.len();
         // Initialize r0 since it is exclusively used as return value for 
         // functions so other operations do not attempt to use it.
@@ -81,27 +76,27 @@ impl Interpreter {
     /// Inserts value into specified register vector slot
     fn register_insert(&mut self, regid: usize, val: Value) {
         if self.regs.len() > regid {
-            self.regs[regid] = val.clone();
+            self.regs[regid] = val;
         } else {
-            self.regs.push(val.clone());
+            self.regs.push(val);
         }
     }
 
     /// Inserts value into specified local pool vector slot
     fn pool_insert(&mut self, index: usize, val: Value) {
         if self.local_pool.len() > index {
-            self.local_pool[index] = val.clone();
+            self.local_pool[index] = val;
         } else {
-            self.local_pool.push(val.clone());
+            self.local_pool.push(val);
         }
     }
 
     /// Inserts value into specified argument vector slot
     fn args_insert(&mut self, index: usize, val: Value) {
         if self.args.len() > index {
-            self.args[index] = val.clone();
+            self.args[index] = val;
         } else {
-            self.args.push(val.clone());
+            self.args.push(val);
         }
     }
 
@@ -382,7 +377,7 @@ impl Interpreter {
             Interpreter::check_str(&self.regs[r2]) {
             let v1: f64 = Interpreter::unpack_number(&self.regs[r1]);
             let v2: &str = Interpreter::unpack_string(&self.regs[r2]);
-            let result: String = v1.to_string() + &v2;
+            let result: String = v1.to_string() + v2;
 
             self.register_insert(res, Value::StringLiteral(result));
         } else if Interpreter::check_str(&self.regs[r1]) && // str & num
