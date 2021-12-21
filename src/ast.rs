@@ -12,7 +12,8 @@ pub enum Expr {
         right: Box<Expr>,
     },
     Call {
-        callee: Box<Expr>, arguments: Vec<Expr>,
+        callee: Box<Expr>, 
+        arguments: Vec<Expr>,
     },
     Grouping {
         expr: Box<Expr>,

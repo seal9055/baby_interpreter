@@ -17,7 +17,7 @@ use codegen::{Codegen, Value, BcArr, Instr};
 use vm::Interpreter;
 
 const DEBUGSOURCE: bool = true;
-const DEBUGAST: bool = true;
+const DEBUGAST: bool = false;
 const DEBUGBYTECODE: bool = true;
 
 fn print_line(file: String, line: u32) {
@@ -76,18 +76,31 @@ fn main() {
         }
     }
 
-    let (bytecode, const_pool) = Codegen::bytecode_gen(stmts);
+    let program = Codegen::bytecode_gen(stmts);
+
+    let mut vals = Vec::new();
+    for (_, value) in program.clone().function_list.into_iter() {
+        vals.push(value);
+    }
 
     if DEBUGBYTECODE {
         print!("+-----------Bytecode--------------+");
-        for (j, instr) in bytecode.clone().iter().enumerate() {
+        for (j, instr) in program.bytecode.clone().iter().enumerate() {
+            if vals.contains(&j) {
+                for (key, value) in program.clone().function_list.into_iter() {
+                    if value == j { print!("\n\n\t< {} >", key); }
+                }
+            }
+            if j == program.entry_point { print!("\n\n\t< Entry Point >"); }
             let i = j+1;
             match instr.clone() {
-                BcArr::I(Instr::Add) => { print!("\n{:4}   Add     ", i) },
-                BcArr::I(Instr::Sub) => { print!("\n{:4}   Sub     ", i) },
-                BcArr::I(Instr::Div) => { print!("\n{:4}   Div     ", i) },
-                BcArr::I(Instr::Mul) => { print!("\n{:4}   Mul     ", i) },
-                BcArr::I(v) => { print!("\n{:4}   {:?}   ", i, v) },
+                BcArr::I(Instr::Add)  => { print!("\n{:4}   Add     ", i) },
+                BcArr::I(Instr::Sub)  => { print!("\n{:4}   Sub     ", i) },
+                BcArr::I(Instr::Div)  => { print!("\n{:4}   Div     ", i) },
+                BcArr::I(Instr::Mul)  => { print!("\n{:4}   Mul     ", i) },
+                BcArr::I(Instr::Jmp)  => { print!("\n{:4}   Jmp     ", i) },
+                BcArr::I(Instr::Call) => { print!("\n{:4}   Call    ", i) },
+                BcArr::I(v)           => { print!("\n{:4}   {:?}   ", i, v) },
                 BcArr::V(Value::Number(v)) => { print!("{:?}, ", v) },
                 BcArr::V(Value::Reg(v)) => { print!("{:?}, ", Value::Reg(v)) },
                 BcArr::V(Value::Pool(v)) => { print!("{:?}, ", Value::Pool(v)) },
@@ -95,16 +108,18 @@ fn main() {
                 BcArr::V(Value::CPool(v)) => { print!("{:?}, ", Value::CPool(v)) },
                 BcArr::V(Value::Bool(v)) => { print!("{:?}, ", Value::Bool(v)) },
                 BcArr::V(Value::VAddr(v)) => { print!("{:?}, ", Value::VAddr(v)) },
-                _ => { panic!("print stuff"); },
-            } }
-        if const_pool.len() > 0 {
+                BcArr::V(Value::Arg(v)) => { print!("{:?}, ", Value::Arg(v)) },
+                BcArr::V(Value::Nil) => { print!("NIL") },
+            } 
+        }
+        if program.const_pool.len() > 0 {
             println!("\n+-----------Const-Pool-------------+\n");
-            for (i,c) in const_pool.clone().iter().enumerate() {
+            for (i,c) in program.const_pool.clone().iter().enumerate() {
                 println!("[{}] - {:?}", i, c);
             }
         }
         println!("\n+----------------------------------+\n");
     }
-    let mut vm = Interpreter::new(bytecode, const_pool);
+    let mut vm = Interpreter::new(program);
     vm.interpret();
 }

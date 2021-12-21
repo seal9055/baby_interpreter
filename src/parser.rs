@@ -426,7 +426,7 @@ impl Parser {
 
     fn finish_call(&mut self, expr: Expr) -> Result<Expr, Error> {
         let mut args: Vec<Expr> = Vec::new();
-        if !self.check(OpenParen) {
+        if !self.check(CloseParen) {
             args.push(self.expression()?);
             while self.match_tokens(&[Comma]) {
                 args.push(self.expression()?);

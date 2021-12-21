@@ -1,9 +1,9 @@
 use crate::{
     tokens::TokenType::*,
     tokens::{Token},
-    ast::{Stmt,Expr, Literal},
+    ast::{Stmt, Expr, Literal, Expr::Variable},
 };
-
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -15,6 +15,7 @@ pub enum Value {
     Pool(u16),
     CPool(usize),
     VAddr(isize),
+    Arg(usize),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -25,8 +26,14 @@ pub enum Instr {
     // Load a value from the local variable stack
     LoadP,
 
+    // Load a value from the arguments (used after function calls)
+    LoadA,
+
     // Push a value to the local variable stack
     PushP,
+
+    // Push a value to the arguments stack
+    PushA,
 
     // Load value from constant pool
     LoadC,
@@ -62,7 +69,13 @@ pub enum Instr {
     JmpIf,
 
     // Unconditional jump
-    JmpUc,
+    Jmp,
+
+    // Used for function calls
+    Call,
+
+    // Used to return from function calls
+    Ret,
 
     // Builtin - print r1
     Print,
@@ -80,6 +93,17 @@ pub struct Vars {
     depth: u8,
 }
 
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub bytecode: Vec<BcArr>,
+
+    pub entry_point: usize,
+
+    pub function_list: HashMap<String, usize>,
+
+    pub const_pool: Vec<Value>,
+}
+
 pub struct Codegen {
     /// Holds bytecode that is later passed on to interpreter
     pub bytecode: Vec<BcArr>,
@@ -90,6 +114,9 @@ pub struct Codegen {
     /// Incremented for each value added to constant pool
     const_counter: usize,
 
+    /// List of all functions in the program
+    function_list: HashMap<String, usize>,
+
     /// Increments for each new virtual register
     reg_counter: u16,
 
@@ -98,152 +125,171 @@ pub struct Codegen {
 
     /// Pool of local variables
     pool: Vec<Vars>,
+
+    /// Entrypoint within bytecode array (necessary because no main function is 
+    /// used)
+    entry_point: Option<usize>,
 }
 
 impl Codegen {
 
     /// Convert ast into bytecodearray
-    pub fn bytecode_gen(ast: Vec<Stmt>) -> (Vec<BcArr>, Vec<Value>) {
+    pub fn bytecode_gen(ast: Vec<Stmt>) -> Program {
         let mut codegen = Codegen {
             bytecode: Vec::new(),
             const_pool: Vec::new(),
             const_counter: 0,
+            function_list: HashMap::new(),
             reg_counter: 0,
             cur_depth: 0,
             pool: Vec::new(),
+            entry_point: None,
         };
+
         for node in ast {
             codegen.interpret_node(&node);
         }
 
-        //for e in interpreter.pool.iter() {
-        //    println!("\n{:?}", e);
-        //}
-
-        (codegen.bytecode, codegen.const_pool)
+        match codegen.entry_point {
+            Some(v) => { 
+                Program {
+                    bytecode: codegen.bytecode, 
+                    entry_point: v,
+                    function_list: codegen.function_list,
+                    const_pool: codegen.const_pool,
+                }
+            },
+            None    => { panic!(
+                            "Runtime Error: Could not determine entry point"); }
+        }
     }
 
     /// Emit instructions
     fn emit_instr(&mut self, instr: BcArr, 
                   r1: BcArr, r2: BcArr, res: BcArr) -> () {
+        // Set entrypoint on first instruction outside of a function/block
+        if self.cur_depth == 0 && self.entry_point == None { 
+            self.entry_point = Some(self.bytecode.len());
+        }
         match instr {
             BcArr::I(Instr::LoadI) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-                //println!("LoadI {:?}, {:?}", res, r1); 
             },
             BcArr::I(Instr::LoadP) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-                //println!("LoadP {:?}, {:?}", res, r1); 
+            },
+            BcArr::I(Instr::LoadA) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
             },
             BcArr::I(Instr::PushP) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-                //println!("PushP {:?}, {:?}", res, r1); 
+            },
+            BcArr::I(Instr::PushA) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(res);
+                self.bytecode.push(r1);
             },
             BcArr::I(Instr::LoadC) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-                //println!("LoadC {:?}, {:?}", res, r1); 
             },
             BcArr::I(Instr::Print) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-                //println!("Print {:?}", r1); 
             },
             BcArr::I(Instr::Add) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Add {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::Sub) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Sub {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::Mul) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Mul {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::Div) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::CmpLT) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::CmpLE) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::CmpGT) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::CmpGE) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::CmpEq) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
-            BcArr::I(Instr::JmpUc) => {
+            BcArr::I(Instr::Jmp) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
             BcArr::I(Instr::JmpIf) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-                //println!("Div {:?}, {:?}, {:?}", res, r1, r2); 
             },
-            _ => { panic!("unimplemented instruction"); }
+            BcArr::I(Instr::Call) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(r1);
+            },
+            BcArr::I(Instr::Ret) => {
+                self.bytecode.push(instr);
+            },
+            _ => { panic!("Runtime Error: Unimplemented Instruction"); },
         }
     }
 
     /// Match different kinds of statements
     fn interpret_node(&mut self, node: &Stmt) -> () {
         match node.clone() {
-            Stmt::Function(_,_,_) => { panic!("FUNC"); },
-            Stmt::Expression(e)   => { self.expression(e);    },
-            Stmt::Variable(n,e)   => { self.assignment(n, e); },
-            Stmt::Block(s)        => { self.block(s);   },
-            Stmt::If(expr, t, f)  => { self.if_stmt(expr, t, f); },
-            Stmt::Return(_)       => { panic!("RETURN"); },
-            Stmt::While(e,b)      => { self.while_stmt(e, b); },
-            Stmt::Print(e)        => { self.print(e);         },
+            Stmt::Function(n, a, e) => { self.function_decl(n, a, e); },
+            Stmt::Expression(e)     => { self.expression(e);          },
+            Stmt::Variable(n, e)    => { self.assignment(n, e);       },
+            Stmt::Block(s)          => { self.block(s);               },
+            Stmt::If(e, t, f)       => { self.if_stmt(e, t, f);       },
+            Stmt::Return(_)         => { panic!("RETURN");            },
+            Stmt::While(e, b)       => { self.while_stmt(e, b);       },
+            Stmt::Print(e)          => { self.print(e);               },
         }
     }
 
@@ -263,9 +309,10 @@ impl Codegen {
 
     /// Return index of value from pool given name
     fn get_pool(&mut self, name: &str) -> u16 {
+        //println!("pool: {:#?}", self.pool.clone());
         let arr: Vec<Vars> = self.pool.clone().into_iter()
             .filter(|v| v.name.clone() == name).collect();
-        let max = arr.iter().map(|v| v.depth).max().unwrap_or(0);
+        let max = arr.iter().map(|v| v.depth).max().unwrap();
         let index = self.pool.iter().position(|v| v.depth == max 
                                               && v.name == name).unwrap();
         index as u16
@@ -276,19 +323,8 @@ impl Codegen {
         self.pool.retain(|v| v.depth != depth);
     }
 
-    /// Interpret a block of code
-    fn block(&mut self, stmts: Vec<Stmt>) -> () {
-        self.cur_depth += 1;
-        for stmt in stmts.iter() {
-            self.interpret_node(stmt);
-        }
-        self.clear_depth(self.cur_depth);
-        self.cur_depth -= 1;
-    }
-
     /// Interpret if statements
-    fn if_stmt(&mut self, expr: Expr, t: Box<Stmt>, f: Option<Box<Stmt>>) 
-        -> () {
+    fn if_stmt(&mut self, expr: Expr, t: Box<Stmt>, f: Option<Box<Stmt>>) {
 
         self.expression(expr);
         let tmp = self.reg_counter;
@@ -306,7 +342,7 @@ impl Codegen {
         };
 
         let offset2 = self.bytecode.len() + 1;
-        self.emit_instr(BcArr::I(Instr::JmpUc), 
+        self.emit_instr(BcArr::I(Instr::Jmp), 
                         BcArr::V(Value::VAddr(0)), 
                         BcArr::V(Value::Nil), 
                         BcArr::V(Value::Nil));
@@ -323,25 +359,22 @@ impl Codegen {
     }
 
     /// Interpret while statements
-    fn while_stmt(&mut self, expr: Expr, b: Box<Stmt>) -> () {
-        let tmp = self.reg_counter;
-        let offset = self.bytecode.len() + 1;
+    fn while_stmt(&mut self, expr: Expr, b: Box<Stmt>) {
+        let tmp_reg = self.reg_counter;
+        let offset  = self.bytecode.len() + 1;
 
-        self.emit_instr(BcArr::I(Instr::JmpUc), 
+        self.emit_instr(BcArr::I(Instr::Jmp), 
                         BcArr::V(Value::VAddr(0)), 
                         BcArr::V(Value::Nil), 
                         BcArr::V(Value::Nil));
 
-        //let loop_start: usize = self.bytecode.len();
-
         self.interpret_node(&*b);
 
-        self.reg_counter = tmp;
+        self.reg_counter = tmp_reg;
         self.expression(expr);
 
         let jmp1: isize = (self.bytecode.len() - offset + 1) as isize;
 
-        //let x = -(self.bytecode.len() + 2 - loop_start) as isize;
         self.emit_instr(BcArr::I(Instr::JmpIf), 
                         BcArr::V(Value::VAddr(-jmp1)), 
                         BcArr::V(Value::Nil), 
@@ -349,7 +382,59 @@ impl Codegen {
 
         let jmp2: isize = (self.bytecode.len() - offset - 1) as isize;
 
+        // TODO fix this
         self.bytecode[offset] = BcArr::V(Value::VAddr(jmp2-12));
+    }
+
+    /// Interpret a block of code
+    fn block(&mut self, stmts: Vec<Stmt>) -> () {
+        self.cur_depth += 1;
+        for stmt in stmts.iter() {
+            self.interpret_node(stmt);
+        }
+        self.clear_depth(self.cur_depth);
+        self.cur_depth -= 1;
+    }
+
+    /// Helper to add a new function to the list of functions
+    fn register_function(&mut self, name: String, pos: usize) {
+        if self.function_list.contains_key(&name) {
+            panic!("Runtime Error: Cannot redeclare function with name: {}", 
+                   name); 
+        }
+        self.function_list.insert(name, pos);
+    }
+
+    /// Generate code for function declarations
+    fn function_decl(&mut self, name: Token, args: Vec<Token>, 
+            code: Vec<Stmt>) {
+        let name    = name.value;
+        let tmp_reg = self.reg_counter;
+        let pos     = self.bytecode.len();
+
+        self.register_function(name, pos);
+
+        // depth increased to mirror depth of function block
+        self.cur_depth += 1;
+        for (i, arg) in args.into_iter().enumerate() {
+            self.pool.push(Vars { name: arg.value, depth: self.cur_depth });
+
+            self.emit_instr(BcArr::I(Instr::LoadA), 
+                        BcArr::V(Value::Arg(i)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Pool((self.pool.len() - 1) as u16 )));
+        };
+        self.cur_depth -= 1;
+        self.block(code);
+        self.cur_depth += 1;
+        
+        self.emit_instr(BcArr::I(Instr::Ret), 
+                    BcArr::V(Value::Nil), 
+                    BcArr::V(Value::Nil), 
+                    BcArr::V(Value::Nil));
+
+        self.cur_depth -= 1;
+        self.reg_counter = tmp_reg;
     }
 
     /// Builtins, currently only supports print
@@ -361,15 +446,16 @@ impl Codegen {
                         BcArr::V(Value::Nil));
     }
 
-
     /// Emit instructions for variable assignment
     fn assignment(&mut self, name: Token, expr: Option<Expr>) -> u16 {
         let e = self.expression(expr.unwrap());
         let depth = self.cur_depth;
         let var = Vars { name: name.value.clone(), depth: depth };
-        if self.pool.contains(&var) {
-            panic!("Runtime Error: Cannot redeclare already existing variable");
+
+        if self.pool.contains(&var) { 
+            panic!("Runtime Error: Cannot redeclare already existing variable"); 
         }
+
         self.pool.push( var.clone() );
         let index: u16 = self.get_pool(&name.value);
         self.emit_instr(BcArr::I(Instr::PushP), 
@@ -382,7 +468,7 @@ impl Codegen {
     /// Emit instructions for expressions
     fn expression(&mut self, expr: Expr) -> u16 {
         let mut res = 0;
-        match expr {
+        match expr.clone() {
             Expr::Binary {left, op, right } => {
                 let r1 = self.expression(*left);
                 let r2 = self.expression(*right);
@@ -442,7 +528,8 @@ impl Codegen {
                             BcArr::V(Value::Reg(r2)), 
                             BcArr::V(Value::Reg(res))); 
                     },
-                    _ => { panic!("Operator not supported"); },
+                    _ => { panic!("Runtime Error: Operator not supported: {:#?}"
+                                  , expr); },
                 }
             },
             Expr::Literal { literal } => {
@@ -466,7 +553,8 @@ impl Codegen {
                                         BcArr::V(Value::Nil), 
                                         BcArr::V(Value::Reg(res))); 
                     },
-                    _ => { panic!("Literal type not implemented"); },
+                    _ => { panic!("Runtime ErrorLiteral type not implemented"); 
+                    },
                 }
             },
             Expr::Variable { name } => {
@@ -489,9 +577,40 @@ impl Codegen {
                                 BcArr::V(Value::Reg(register_index)), 
                                 BcArr::V(Value::Nil), 
                                 BcArr::V(Value::Pool(pool_index)));
-            }
-            _ => { panic!("Expression not yet implemented in codegen: 
-                          {:#?}", expr); },
+            },
+            Expr::Call { callee, arguments } => {
+                let pos;
+                match *callee {
+                    Variable { name } => {
+                        //panic!("name: {:?}", name);
+                        pos = match self.function_list.get(&name.value) {
+                            Some(v) => { *v as isize },
+                            None    => { 
+                                panic!("Runtime Error: function: '{}' that you \
+                                    attempt to call on line {} does not exist",
+                                       name.value, name.line_num);
+                            },
+                        };
+                    },
+                _ => { panic!("Runtime Error: Error during call"); },
+                }
+
+                for (i, arg) in arguments.into_iter().enumerate() {
+                    let register_index = self.expression(arg);
+
+                    self.emit_instr(BcArr::I(Instr::PushA), 
+                                BcArr::V(Value::Reg(register_index)), 
+                                BcArr::V(Value::Nil), 
+                                BcArr::V(Value::Arg(i)))
+                }
+
+                self.emit_instr(BcArr::I(Instr::Call), 
+                                BcArr::V(Value::VAddr(pos)), 
+                                BcArr::V(Value::Nil), 
+                                BcArr::V(Value::Nil))
+            },
+            _ => { panic!("Expression not yet implemented in codegen: {:#?}"
+                          , expr); },
         }
         res
     }

@@ -1,6 +1,6 @@
-use crate::{
-    codegen::{Value, Instr, BcArr},
+use crate::{ codegen::{Value, Instr, BcArr, Program},
 };
+use std::collections::HashMap;
 
 /// Macro used to extract known enum variants from enums
 #[macro_export]
@@ -27,8 +27,17 @@ pub struct Interpreter {
     /// Holds variables currently in scope
     local_pool: Vec<Value>, 
 
+    /// Holds all declared functions
+    function_list: HashMap<String, usize>,
+
     /// Holds constants
     const_pool: Vec<Value>, 
+
+    /// Used to pass function arguments
+    args: Vec<Value>,
+
+    /// Call stack that holds the return values
+    call_stack: Vec<usize>,
 
     /// Flag used to determine conditional jumps
     flag: bool,
@@ -37,12 +46,17 @@ pub struct Interpreter {
 impl Interpreter {
 
     /// Returns new interpreter object
-    pub fn new(bytecode: Vec<BcArr>, const_pool: Vec<Value>) -> Self {
+    //pub fn new(bytecode: Vec<BcArr>, const_pool: Vec<Value>, entry_point: usize) 
+    pub fn new(program: Program) 
+            -> Self {
         Self {
-            bytecode: bytecode,
-            const_pool: const_pool,
-            ip: 0,
+            bytecode: program.bytecode,
+            const_pool: program.const_pool,
+            ip: program.entry_point,
+            function_list: program.function_list,
             regs: Vec::new(),
+            args: Vec::new(),
+            call_stack: Vec::new(),
             local_pool: Vec::new(),
             flag: false,
         }
@@ -72,6 +86,24 @@ impl Interpreter {
         }
     }
 
+    /// Inserts value into specified pool_slot
+    fn pool_insert(&mut self, index: usize, val: Value) {
+        if self.local_pool.len() > index {
+            self.local_pool[index] = val.clone();
+        } else {
+            self.local_pool.push(val.clone());
+        }
+    }
+
+    /// Inserts value into specified pool_slot
+    fn args_insert(&mut self, index: usize, val: Value) {
+        if self.args.len() > index {
+            self.args[index] = val.clone();
+        } else {
+            self.args.push(val.clone());
+        }
+    }
+
     /// Unpacks a register from the BcArr enum
     fn unpack_register(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Reg(c)) => c) as usize
@@ -90,6 +122,11 @@ impl Interpreter {
     /// Unpacks a VAddr from the BcArr enum
     fn unpack_vaddr(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::VAddr(c)) => c) as usize
+    }
+
+    /// Unpacks an argument index from the BcArr enum
+    fn unpack_arg(arg: BcArr) -> usize {
+        extract_enum_value!(arg, BcArr::V(Value::Arg(c)) => c) as usize
     }
 
     /// Unpacks a pool_index from the BcArr enum
@@ -120,20 +157,29 @@ impl Interpreter {
     /// Switch to determine the instruction and execute the appropriate function
     fn execute_instr(&mut self) {
         let instr = self.fetch_val();
+        //println!("{}  {:?}", self.ip, instr);
         match instr { 
             BcArr::I(Instr::LoadI) => {
                 self.loadi();
             }, BcArr::I(Instr::PushP) => {
                 self.pushp();
+            }, BcArr::I(Instr::PushA) => {
+                self.pusha();
             },
             BcArr::I(Instr::LoadP) => {
                 self.loadp();
             },
+            BcArr::I(Instr::LoadA) => {
+                self.loada();
+            },
             BcArr::I(Instr::LoadC) => {
                 self.loadc();
             },
-            BcArr::I(Instr::JmpUc) => {
+            BcArr::I(Instr::Jmp) => {
                 self.jmp_unconditional();
+            },
+            BcArr::I(Instr::Call) => {
+                self.function_call();
             },
             BcArr::I(Instr::JmpIf) => {
                 self.jmp_if();
@@ -168,6 +214,9 @@ impl Interpreter {
             BcArr::I(Instr::CmpEq) => {
                 self.cmp_equals();
             },
+            BcArr::I(Instr::Ret) => {
+                self.ret();
+            },
             _ => { panic!("Instruction not implemented in vm: {:?}", instr); },
         }
     }
@@ -190,13 +239,21 @@ impl Interpreter {
 
         let register_index = Interpreter::unpack_register(reg);
         let pool_index = Interpreter::unpack_pool(pool);
-        let val = &self.regs[register_index];
+        let val = self.regs[register_index].clone();
 
-        if self.local_pool.len() > pool_index {
-            self.local_pool[pool_index] = val.clone();
-        } else {
-            self.local_pool.push(val.clone());
-        }
+        self.pool_insert(pool_index, val);
+    }
+
+    /// PushA instruction
+    fn pusha(&mut self) {
+        let arg = self.fetch_val();
+        let reg = self.fetch_val();
+
+        let register_index = Interpreter::unpack_register(reg);
+        let args_index = Interpreter::unpack_arg(arg);
+        let val = self.regs[register_index].clone();
+
+        self.args_insert(args_index, val);
     }
 
     /// LoadP instruction
@@ -209,6 +266,18 @@ impl Interpreter {
         let val = self.local_pool[pool_index].clone();
 
         self.register_insert(register_index, val);
+    }
+
+    /// LoadA instruction
+    fn loada(&mut self) {
+        let pool  = self.fetch_val();
+        let arg   = self.fetch_val();
+
+        let pool_index = Interpreter::unpack_pool(pool);
+        let arg_index  = Interpreter::unpack_arg(arg);
+        let val = self.args[arg_index].clone();
+
+        self.pool_insert(pool_index, val);
     }
 
     /// LoadP instruction
@@ -240,6 +309,18 @@ impl Interpreter {
         let mut fake_ip: isize = self.ip as isize;
         fake_ip += offset;
         self.ip = fake_ip as usize;
+    }
+
+    /// Function Call
+    fn function_call(&mut self) {
+        self.call_stack.push(self.ip + 1);
+        let ip: usize = Interpreter::unpack_vaddr(self.fetch_val());
+        self.ip = ip;
+    }
+
+    /// Return from function
+    fn ret(&mut self) {
+        self.ip = self.call_stack.pop().unwrap();
     }
 
     /// Print instruction
