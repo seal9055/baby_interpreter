@@ -19,7 +19,7 @@ use vm::Interpreter;
 const DEBUGSOURCE: bool   = true;
 const DEBUGTOKENS: bool   = false;
 const DEBUGAST: bool      = false;
-const DEBUGBYTECODE: bool = false;
+const DEBUGBYTECODE: bool = true;
 
 /// Used to print a line until \n (debug purposes)
 fn print_line(file: String, line: u32) {

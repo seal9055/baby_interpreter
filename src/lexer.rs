@@ -201,7 +201,8 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                 cur_token.value.push(c);
                 cur_token.t_type = Identifier;
                 while char::is_alphanumeric(*lexer.peek().unwrap()) || 
-                        *lexer.peek().unwrap() == '.' {
+                        *lexer.peek().unwrap() == '.' ||
+                        *lexer.peek().unwrap() == '_' {
                     let d = lexer.next().unwrap();
                     cur_token.value.push(d);
                 }
