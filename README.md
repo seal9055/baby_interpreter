@@ -38,4 +38,4 @@ folder has some more code examples if you wish to see what else the interpreter 
 This interpreter supports all common primitive types (Numbers, Strings, Booleans), and common operations on them.  
 It also supports variables and control flow via if/else statements, while loops and functions. These can be recursive,  
 however, closures are not yet supported. I may add them in the future including some other additions such as  
-optimizations during code generation, support for arrays, and some more builtins apart from just coneole.log().  
+optimizations during code generation, support for arrays, and some more builtins apart from just console.log().  
