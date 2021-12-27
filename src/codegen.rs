@@ -15,7 +15,6 @@ pub enum Value {
     Pool(u16),
     CPool(usize),
     VAddr(isize),
-    Arg(usize),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -191,7 +190,6 @@ impl Codegen {
             },
             BcArr::I(Instr::LoadA) => {
                 self.bytecode.push(instr);
-                self.bytecode.push(res);
                 self.bytecode.push(r1);
             },
             BcArr::I(Instr::PushP) => {
@@ -201,7 +199,6 @@ impl Codegen {
             },
             BcArr::I(Instr::PushA) => {
                 self.bytecode.push(instr);
-                self.bytecode.push(res);
                 self.bytecode.push(r1);
             },
             BcArr::I(Instr::LoadC) => {
@@ -436,12 +433,12 @@ impl Codegen {
 
         // depth increased to mirror depth of function block
         self.cur_depth += 1;
-        for (i, arg) in args.into_iter().enumerate() {
+        for arg in args.into_iter() {
             self.pool.push(Vars { name: arg.value, depth: self.cur_depth });
             self.emit_instr(BcArr::I(Instr::LoadA), 
-                        BcArr::V(Value::Arg(i)), 
+                        BcArr::V(Value::Pool((self.pool.len() - 1) as u16)),
                         BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Pool((self.pool.len() - 1) as u16 )));
+                        BcArr::V(Value::Nil));
         };
         self.cur_depth -= 1;
         self.block(code);
@@ -614,21 +611,26 @@ impl Codegen {
                 }
 
                 // Emit push argument instructions for every argument
-                for (i, arg) in arguments.into_iter().enumerate() {
+                for arg in arguments.into_iter() {
                     let register_index = self.expression(arg);
 
                     self.emit_instr(BcArr::I(Instr::PushA), 
                                 BcArr::V(Value::Reg(register_index)), 
                                 BcArr::V(Value::Nil), 
-                                BcArr::V(Value::Arg(i)));
+                                BcArr::V(Value::Nil));
                 }
 
                 self.emit_instr(BcArr::I(Instr::Call), 
                                 BcArr::V(Value::VAddr(pos)), 
                                 BcArr::V(Value::Nil), 
                                 BcArr::V(Value::Nil));
-                // res = 0 because return values are stored in r0
-                res = 0; 
+
+                res = self.get_next_reg();
+
+                self.emit_instr(BcArr::I(Instr::LoadR), 
+                        BcArr::V(Value::Reg(0)), 
+                        BcArr::V(Value::Nil), 
+                        BcArr::V(Value::Reg(res)));
             },
             _ => { panic!("Expression not yet implemented in codegen: {:#?}"
                           , expr); },

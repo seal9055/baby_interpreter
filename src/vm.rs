@@ -91,15 +91,6 @@ impl Interpreter {
         }
     }
 
-    /// Inserts value into specified argument vector slot
-    fn args_insert(&mut self, index: usize, val: Value) {
-        if self.args.len() > index {
-            self.args[index] = val;
-        } else {
-            self.args.push(val);
-        }
-    }
-
     /// Unpacks a register from the BcArr enum
     fn unpack_register(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Reg(c)) => c) as usize
@@ -118,11 +109,6 @@ impl Interpreter {
     /// Unpacks a VAddr from the BcArr enum
     fn unpack_vaddr(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::VAddr(c)) => c) as usize
-    }
-
-    /// Unpacks an argument index from the BcArr enum
-    fn unpack_arg(arg: BcArr) -> usize {
-        extract_enum_value!(arg, BcArr::V(Value::Arg(c)) => c) as usize
     }
 
     /// Unpacks a constant pool index from the BcArr enum
@@ -259,14 +245,12 @@ impl Interpreter {
 
     /// PushA instruction - Push value from register into argument register
     fn pusha(&mut self) {
-        let arg = self.fetch_val();
         let reg = self.fetch_val();
 
         let register_index = Interpreter::unpack_register(reg);
-        let args_index = Interpreter::unpack_arg(arg);
         let val = self.regs[register_index].clone();
 
-        self.args_insert(args_index, val);
+        self.args.push(val);
     }
 
     /// LoadP instruction - Load value from local pool into a register
@@ -284,11 +268,9 @@ impl Interpreter {
     /// LoadA instruction - Load value from an argument register into register
     fn loada(&mut self) {
         let pool  = self.fetch_val();
-        let arg   = self.fetch_val();
 
         let pool_index = Interpreter::unpack_pool(pool);
-        let arg_index  = Interpreter::unpack_arg(arg);
-        let val = self.args[arg_index].clone();
+        let val = self.args.remove(0);
 
         self.pool_insert(pool_index, val);
     }

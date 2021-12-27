@@ -118,7 +118,6 @@ fn main() {
                 BcArr::V(Value::CPool(v)) => { print!("{:?}, ", Value::CPool(v)) },
                 BcArr::V(Value::Bool(v)) => { print!("{:?}, ", Value::Bool(v)) },
                 BcArr::V(Value::VAddr(v)) => { print!("{:?}, ", Value::VAddr(v)) },
-                BcArr::V(Value::Arg(v)) => { print!("{:?}, ", Value::Arg(v)) },
                 BcArr::V(Value::Nil) => { print!("NIL") },
             } 
         }
