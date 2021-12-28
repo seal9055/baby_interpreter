@@ -178,6 +178,26 @@ pub fn tokenize(file: &str) -> Vec<Token>  {
                     end_token(&mut cur_token, &mut tokens);
                 }
             },
+            '&' => {
+                if *lexer.peek().unwrap() == '&' {
+                    end_token(&mut cur_token, &mut tokens);
+                    cur_token.value.push(c);
+                    cur_token.value.push('&');
+                    cur_token.t_type = And;
+                    lexer.next();
+                    end_token(&mut cur_token, &mut tokens);
+                }
+            },
+            '|' => {
+                if *lexer.peek().unwrap() == '|' {
+                    end_token(&mut cur_token, &mut tokens);
+                    cur_token.value.push(c);
+                    cur_token.value.push('|');
+                    cur_token.t_type = Or;
+                    lexer.next();
+                    end_token(&mut cur_token, &mut tokens);
+                }
+            },
             '0'..='9' => {
                 let mut is_float = false;
                 cur_token.t_type = Number;

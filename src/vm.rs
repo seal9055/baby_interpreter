@@ -170,6 +170,9 @@ impl Interpreter {
             BcArr::I(Instr::JmpIf) => {
                 self.jmp_if();
             },
+            BcArr::I(Instr::JmpIN) => {
+                self.jmp_if_not();
+            },
             BcArr::I(Instr::Print) => {
                 self.print();
             },
@@ -293,6 +296,17 @@ impl Interpreter {
         let mut fake_ip: isize = self.ip as isize;
 
         if self.flag {
+            fake_ip += offset;
+            self.ip = fake_ip as usize;
+        }
+    }
+
+    /// Jmp if flag is not set - Adds VAddr offset to IP
+    fn jmp_if_not(&mut self) {
+        let offset: isize = (Interpreter::unpack_vaddr(self.fetch_val())) as isize;
+        let mut fake_ip: isize = self.ip as isize;
+
+        if !self.flag {
             fake_ip += offset;
             self.ip = fake_ip as usize;
         }

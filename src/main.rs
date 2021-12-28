@@ -16,9 +16,9 @@ use parser::{Parser};
 use codegen::{Codegen, Value, BcArr, Instr};
 use vm::Interpreter;
 
-const DEBUGSOURCE: bool   = true;
-const DEBUGTOKENS: bool   = false;
-const DEBUGAST: bool      = false;
+const DEBUGSOURCE  : bool = true;
+const DEBUGTOKENS  : bool = false;
+const DEBUGAST     : bool = false;
 const DEBUGBYTECODE: bool = true;
 
 /// Used to print a line until \n (debug purposes)

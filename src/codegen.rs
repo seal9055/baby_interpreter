@@ -1,7 +1,7 @@
 use crate::{
     tokens::TokenType::*,
     tokens::{Token},
-    ast::{Stmt, Expr, Literal, Expr::Variable},
+    ast::{Stmt, Expr, Literal, Expr::Variable, LogicalOp::And, LogicalOp::Or},
 };
 use std::collections::HashMap;
 
@@ -69,6 +69,9 @@ pub enum Instr {
 
     // Jump if flag is set using offset relative to IP
     JmpIf,
+
+    // Jump to offset relative to IP if flag is not set
+    JmpIN,
 
     // Unconditional jump using offset relative to IP
     Jmp,
@@ -278,6 +281,10 @@ impl Codegen {
             },
             BcArr::I(Instr::Ret) => {
                 self.bytecode.push(instr);
+            },
+            BcArr::I(Instr::JmpIN) => {
+                self.bytecode.push(instr);
+                self.bytecode.push(r1);
             },
             _ => { panic!("Runtime Error: Unimplemented Instruction: {:?}",
                           instr); },
@@ -632,8 +639,40 @@ impl Codegen {
                         BcArr::V(Value::Nil), 
                         BcArr::V(Value::Reg(res)));
             },
-            _ => { panic!("Expression not yet implemented in codegen: {:#?}"
-                          , expr); },
+            Expr::Logical { l_expr, operator, r_expr } => {
+                match operator {
+                    And => { 
+                        self.expression(*l_expr);
+                        let offset = self.bytecode.len() + 1;
+                        self.emit_instr(BcArr::I(Instr::JmpIN), 
+                                        BcArr::V(Value::VAddr(0)), 
+                                        BcArr::V(Value::Nil), 
+                                        BcArr::V(Value::Nil));
+
+                        let tmp = self.reg_counter;
+                        self.expression(*r_expr);
+                        self.reg_counter = tmp;
+                        let jmp: isize = (self.bytecode.len() - offset - 1) as isize;
+                        self.bytecode[offset] = BcArr::V(Value::VAddr(jmp));
+                    }
+                    Or  => { 
+                        self.expression(*l_expr);
+                        let offset = self.bytecode.len() + 1;
+                        self.emit_instr(BcArr::I(Instr::JmpIf), 
+                                        BcArr::V(Value::VAddr(0)), 
+                                        BcArr::V(Value::Nil), 
+                                        BcArr::V(Value::Nil));
+
+                        let tmp = self.reg_counter;
+                        self.expression(*r_expr);
+                        self.reg_counter = tmp;
+                        let jmp: isize = (self.bytecode.len() - offset - 1) as isize;
+                        self.bytecode[offset] = BcArr::V(Value::VAddr(jmp));
+                    },
+                }
+
+            },
+            _ => { panic!("Expression not yet implemented in codegen: {:#?}", expr); },
         }
         res
     }
