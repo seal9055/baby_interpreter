@@ -1,7 +1,7 @@
 use crate::{
+    ast::{Expr, Expr::Variable, Literal, LogicalOp::And, LogicalOp::Or, Stmt},
+    tokens::Token,
     tokens::TokenType::*,
-    tokens::{Token},
-    ast::{Stmt, Expr, Literal, Expr::Variable, LogicalOp::And, LogicalOp::Or},
 };
 use std::collections::HashMap;
 
@@ -131,13 +131,12 @@ pub struct Codegen {
     /// Pool of local variables
     pool: Vec<Vars>,
 
-    /// Entrypoint within bytecode array (necessary because no main function is 
+    /// Entrypoint within bytecode array (necessary because no main function is
     /// used)
     entry_point: Option<usize>,
 }
 
 impl Codegen {
-
     /// Convert ast into bytecodearray
     pub fn bytecode_gen(ast: Vec<Stmt>) -> Program {
         let mut codegen = Codegen {
@@ -156,23 +155,22 @@ impl Codegen {
         }
 
         match codegen.entry_point {
-            Some(v) => { 
-                Program {
-                    bytecode: codegen.bytecode, 
-                    entry_point: v,
-                    function_list: codegen.function_list,
-                    const_pool: codegen.const_pool,
-                }
+            Some(v) => Program {
+                bytecode: codegen.bytecode,
+                entry_point: v,
+                function_list: codegen.function_list,
+                const_pool: codegen.const_pool,
             },
-            None    => { panic!(
-                            "Runtime Error: Could not determine entry point"); }
+            None => {
+                panic!("Runtime Error: Could not determine entry point");
+            }
         }
     }
 
     /// Emit instructions
     fn emit_instr(&mut self, instr: BcArr, r1: BcArr, r2: BcArr, res: BcArr) {
         // Set entrypoint on first instruction outside of a function/block
-        if self.cur_depth == 0 && self.entry_point == None { 
+        if self.cur_depth == 0 && self.entry_point == None {
             self.entry_point = Some(self.bytecode.len());
         }
         match instr {
@@ -180,128 +178,145 @@ impl Codegen {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::LoadR) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::LoadP) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::LoadA) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::PushP) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::PushA) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::LoadC) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::Print) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::Add) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::Sub) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::Mul) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::Div) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::CmpLT) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::CmpLE) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::CmpGT) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::CmpGE) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::CmpEq) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(res);
                 self.bytecode.push(r1);
                 self.bytecode.push(r2);
-            },
+            }
             BcArr::I(Instr::Jmp) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::JmpIf) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::Call) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
+            }
             BcArr::I(Instr::Ret) => {
                 self.bytecode.push(instr);
-            },
+            }
             BcArr::I(Instr::JmpIN) => {
                 self.bytecode.push(instr);
                 self.bytecode.push(r1);
-            },
-            _ => { panic!("Runtime Error: Unimplemented Instruction: {:?}",
-                          instr); },
+            }
+            _ => {
+                panic!("Runtime Error: Unimplemented Instruction: {:?}", instr);
+            }
         }
     }
 
     /// Match different kinds of statements
     fn interpret_node(&mut self, node: &Stmt) {
         match node.clone() {
-            Stmt::Function(n, a, e) => { self.function_decl(n, a, e); },
-            Stmt::Expression(e)     => { self.expression(e);          },
-            Stmt::Variable(n, e)    => { self.assignment(n, e);       },
-            Stmt::Block(s)          => { self.block(s);               },
-            Stmt::If(e, t, f)       => { self.if_stmt(e, t, f);       },
-            Stmt::Return(e)         => { self.ret(e);                 },
-            Stmt::While(e, b)       => { self.while_stmt(e, b);       },
-            Stmt::Print(e)          => { self.print(e);               },
+            Stmt::Function(n, a, e) => {
+                self.function_decl(n, a, e);
+            }
+            Stmt::Expression(e) => {
+                self.expression(&e);
+            }
+            Stmt::Variable(n, e) => {
+                self.assignment(n, e);
+            }
+            Stmt::Block(s) => {
+                self.block(s);
+            }
+            Stmt::If(e, t, f) => {
+                self.if_stmt(e, t, f);
+            }
+            Stmt::Return(e) => {
+                self.ret(e);
+            }
+            Stmt::While(e, b) => {
+                self.while_stmt(e, b);
+            }
+            Stmt::Print(e) => {
+                self.print(e);
+            }
         }
     }
 
@@ -321,12 +336,21 @@ impl Codegen {
 
     /// Return index of value from pool given name
     fn get_pool(&mut self, name: &str) -> u16 {
-        let arr: Vec<Vars> = self.pool.clone().into_iter()
-            .filter(|v| v.name.clone() == name).collect();
-        if arr.is_empty() { panic!("Runtime Error: Variable does not exist"); }
+        let arr: Vec<Vars> = self
+            .pool
+            .clone()
+            .into_iter()
+            .filter(|v| v.name.clone() == name)
+            .collect();
+        if arr.is_empty() {
+            panic!("Runtime Error: Variable does not exist");
+        }
         let max = arr.iter().map(|v| v.depth).max().unwrap();
-        let index = self.pool.iter().position(|v| v.depth == max 
-                                              && v.name == name).unwrap();
+        let index = self
+            .pool
+            .iter()
+            .position(|v| v.depth == max && v.name == name)
+            .unwrap();
         index as u16
     }
 
@@ -337,24 +361,29 @@ impl Codegen {
 
     /// Interpret if statements
     fn if_stmt(&mut self, expr: Expr, t: Box<Stmt>, f: Option<Box<Stmt>>) {
-
         // Sets flag to true/false depending on expression result
-        self.expression(expr);
+        self.expression(&expr);
         let tmp = self.reg_counter;
         let offset1 = self.bytecode.len() + 1;
 
-        self.emit_instr(BcArr::I(Instr::JmpIf), 
-                        BcArr::V(Value::VAddr(0)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Nil));
+        self.emit_instr(
+            BcArr::I(Instr::JmpIf),
+            BcArr::V(Value::VAddr(0)),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+        );
 
-        if let Some(x) = f { self.interpret_node(&*x); }
+        if let Some(x) = f {
+            self.interpret_node(&*x);
+        }
 
         let offset2 = self.bytecode.len() + 1;
-        self.emit_instr(BcArr::I(Instr::Jmp), 
-                        BcArr::V(Value::VAddr(0)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Nil));
+        self.emit_instr(
+            BcArr::I(Instr::Jmp),
+            BcArr::V(Value::VAddr(0)),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+        );
 
         let jmp_1: isize = (self.bytecode.len() - offset1 - 1) as isize;
         self.reg_counter = tmp;
@@ -369,22 +398,26 @@ impl Codegen {
     /// Interpret while statements
     fn while_stmt(&mut self, expr: Expr, b: Box<Stmt>) {
         let tmp_reg = self.reg_counter;
-        let offset  = self.bytecode.len() + 1;
+        let offset = self.bytecode.len() + 1;
 
-        self.emit_instr(BcArr::I(Instr::Jmp), 
-                        BcArr::V(Value::VAddr(0)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Nil));
+        self.emit_instr(
+            BcArr::I(Instr::Jmp),
+            BcArr::V(Value::VAddr(0)),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+        );
 
         self.interpret_node(&*b);
         self.reg_counter = tmp_reg;
-        self.expression(expr);
+        self.expression(&expr);
         let jmp1: isize = (self.bytecode.len() - offset + 1) as isize;
 
-        self.emit_instr(BcArr::I(Instr::JmpIf), 
-                        BcArr::V(Value::VAddr(-jmp1)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Nil));
+        self.emit_instr(
+            BcArr::I(Instr::JmpIf),
+            BcArr::V(Value::VAddr(-jmp1)),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+        );
         let jmp2: isize = (self.bytecode.len() - offset - 13) as isize;
 
         // Patch in correct offset after calculating it
@@ -404,57 +437,69 @@ impl Codegen {
     /// If the function attempts to return a value, load it into r0
     fn ret(&mut self, expr: Option<Expr>) {
         match expr {
-            Some(e) => { 
-                let v = self.expression(e);
-                self.emit_instr(BcArr::I(Instr::LoadR), 
-                        BcArr::V(Value::Reg(v)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Reg(0)));
-            },
-            None    => { 
-                self.emit_instr(BcArr::I(Instr::LoadI), 
-                        BcArr::V(Value::Number(0.0)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Reg(0)));
-            },
+            Some(e) => {
+                let v = self.expression(&e);
+                self.emit_instr(
+                    BcArr::I(Instr::LoadR),
+                    BcArr::V(Value::Reg(v)),
+                    BcArr::V(Value::Nil),
+                    BcArr::V(Value::Reg(0)),
+                );
+            }
+            None => {
+                self.emit_instr(
+                    BcArr::I(Instr::LoadI),
+                    BcArr::V(Value::Number(0.0)),
+                    BcArr::V(Value::Nil),
+                    BcArr::V(Value::Reg(0)),
+                );
+            }
         }
     }
 
     /// Helper to add a new function to the list of functions
     fn register_function(&mut self, name: String, pos: usize) {
         if self.function_list.contains_key(&name) {
-            panic!("Runtime Error: Cannot redeclare function with name: {}", 
-                   name); 
+            panic!(
+                "Runtime Error: Cannot redeclare function with name: {}",
+                name
+            );
         }
         self.function_list.insert(name, pos);
     }
 
     /// Generate code for function declarations
-    fn function_decl(&mut self, name: Token, args: Vec<Token>, 
-            code: Vec<Stmt>) {
-        let name    = name.value;
+    fn function_decl(&mut self, name: Token, args: Vec<Token>, code: Vec<Stmt>) {
+        let name = name.value;
         let tmp_reg = self.reg_counter;
-        let pos     = self.bytecode.len();
+        let pos = self.bytecode.len();
 
         self.register_function(name, pos);
 
         // depth increased to mirror depth of function block
         self.cur_depth += 1;
         for arg in args.into_iter() {
-            self.pool.push(Vars { name: arg.value, depth: self.cur_depth });
-            self.emit_instr(BcArr::I(Instr::LoadA), 
-                        BcArr::V(Value::Pool((self.pool.len() - 1) as u16)),
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Nil));
-        };
+            self.pool.push(Vars {
+                name: arg.value,
+                depth: self.cur_depth,
+            });
+            self.emit_instr(
+                BcArr::I(Instr::LoadA),
+                BcArr::V(Value::Pool((self.pool.len() - 1) as u16)),
+                BcArr::V(Value::Nil),
+                BcArr::V(Value::Nil),
+            );
+        }
         self.cur_depth -= 1;
         self.block(code);
         self.cur_depth += 1;
-        
-        self.emit_instr(BcArr::I(Instr::Ret), 
-                    BcArr::V(Value::Nil), 
-                    BcArr::V(Value::Nil), 
-                    BcArr::V(Value::Nil));
+
+        self.emit_instr(
+            BcArr::I(Instr::Ret),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+        );
 
         self.cur_depth -= 1;
         self.reg_counter = tmp_reg;
@@ -462,217 +507,269 @@ impl Codegen {
 
     /// Builtins, currently only supports console.log()
     fn print(&mut self, expr: Expr) {
-        let e = self.expression(expr);
-        self.emit_instr(BcArr::I(Instr::Print), 
-                        BcArr::V(Value::Reg(e)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Nil));
+        let e = self.expression(&expr);
+        self.emit_instr(
+            BcArr::I(Instr::Print),
+            BcArr::V(Value::Reg(e)),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Nil),
+        );
     }
 
     /// Emit instructions for variable assignment
     fn assignment(&mut self, name: Token, expr: Option<Expr>) -> u16 {
-        let e = self.expression(expr.unwrap());
+        let e = self.expression(&expr.unwrap());
         let depth = self.cur_depth;
-        let var = Vars { name: name.value.clone(), depth };
+        let var = Vars {
+            name: name.value.clone(),
+            depth,
+        };
 
-        if self.pool.contains(&var) { 
-            panic!("Runtime Error: Cannot redeclare already existing variable"); 
+        if self.pool.contains(&var) {
+            panic!("Runtime Error: Cannot redeclare already existing variable");
         }
-        self.pool.push( var );
+        self.pool.push(var);
         let index: u16 = self.get_pool(&name.value);
-        self.emit_instr(BcArr::I(Instr::PushP), 
-                        BcArr::V(Value::Reg(e)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Pool(index)));
+        self.emit_instr(
+            BcArr::I(Instr::PushP),
+            BcArr::V(Value::Reg(e)),
+            BcArr::V(Value::Nil),
+            BcArr::V(Value::Pool(index)),
+        );
         index
     }
 
     /// Emit instructions for expressions and return result register
-    fn expression(&mut self, expr: Expr) -> u16 {
+    fn expression(&mut self, expr: &Expr) -> u16 {
         let mut res = 0;
-        match expr.clone() {
-            Expr::Binary {left, op, right } => {
-                let r1 = self.expression(*left);
-                let r2 = self.expression(*right);
+        match expr {
+            Expr::Binary { left, op, right } => {
+                let r1 = self.expression(left);
+                let r2 = self.expression(right);
                 res = self.get_next_reg();
                 match op.t_type {
-                    Plus        => { 
-                        self.emit_instr(BcArr::I(Instr::Add), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Minus       => { 
-                        self.emit_instr(BcArr::I(Instr::Sub), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Divide      => { 
-                        self.emit_instr(BcArr::I(Instr::Div), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Multiply    => { 
-                        self.emit_instr(BcArr::I(Instr::Mul), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Less        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpLT), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    LessEq        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpLE), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Greater        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpGT), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    GreaterEq        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpGE), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    Equals        => { 
-                        self.emit_instr(BcArr::I(Instr::CmpEq), 
-                            BcArr::V(Value::Reg(r1)), 
-                            BcArr::V(Value::Reg(r2)), 
-                            BcArr::V(Value::Reg(res))); 
-                    },
-                    _ => { panic!("Runtime Error: Operator not supported: {:#?}"
-                                  , expr); },
+                    Plus => {
+                        self.emit_instr(
+                            BcArr::I(Instr::Add),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    Minus => {
+                        self.emit_instr(
+                            BcArr::I(Instr::Sub),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    Divide => {
+                        self.emit_instr(
+                            BcArr::I(Instr::Div),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    Multiply => {
+                        self.emit_instr(
+                            BcArr::I(Instr::Mul),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    Less => {
+                        self.emit_instr(
+                            BcArr::I(Instr::CmpLT),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    LessEq => {
+                        self.emit_instr(
+                            BcArr::I(Instr::CmpLE),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    Greater => {
+                        self.emit_instr(
+                            BcArr::I(Instr::CmpGT),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    GreaterEq => {
+                        self.emit_instr(
+                            BcArr::I(Instr::CmpGE),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    Equals => {
+                        self.emit_instr(
+                            BcArr::I(Instr::CmpEq),
+                            BcArr::V(Value::Reg(r1)),
+                            BcArr::V(Value::Reg(r2)),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    _ => {
+                        panic!("Runtime Error: Operator not supported: {:#?}", expr);
+                    }
                 }
-            },
+            }
             Expr::Literal { literal } => {
-                match literal { 
-                    Literal::Number(i) => { 
+                match literal {
+                    Literal::Number(i) => {
                         res = self.get_next_reg();
-                        self.emit_instr(BcArr::I(Instr::LoadI), 
-                                        BcArr::V(Value::Number(i)), 
-                                        BcArr::V(Value::Nil), 
-                                        BcArr::V(Value::Reg(res))); 
-                    },
+                        self.emit_instr(
+                            BcArr::I(Instr::LoadI),
+                            BcArr::V(Value::Number(*i)),
+                            BcArr::V(Value::Nil),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
                     Literal::StringLiteral(s) => {
-                        self.const_pool.push(Value::StringLiteral(s));
+                        self.const_pool.push(Value::StringLiteral(s.clone()));
                         let const_index = self.get_next_const();
 
                         //let r1 = self.get_next_reg();
                         res = self.get_next_reg();
 
-                        self.emit_instr(BcArr::I(Instr::LoadC), 
-                                        BcArr::V(Value::CPool(const_index)), 
-                                        BcArr::V(Value::Nil), 
-                                        BcArr::V(Value::Reg(res))); 
-                    },
-                    _ => { panic!("Runtime ErrorLiteral type not implemented"); 
-                    },
+                        self.emit_instr(
+                            BcArr::I(Instr::LoadC),
+                            BcArr::V(Value::CPool(const_index)),
+                            BcArr::V(Value::Nil),
+                            BcArr::V(Value::Reg(res)),
+                        );
+                    }
+                    _ => {
+                        panic!("Runtime ErrorLiteral type not implemented");
+                    }
                 }
-            },
+            }
             Expr::Variable { name } => {
                 let index = self.get_pool(&name.value);
                 res = self.get_next_reg();
-                self.emit_instr(BcArr::I(Instr::LoadP), 
-                                BcArr::V(Value::Pool(index)), 
-                                BcArr::V(Value::Nil), 
-                                BcArr::V(Value::Reg(res)));
-            },
+                self.emit_instr(
+                    BcArr::I(Instr::LoadP),
+                    BcArr::V(Value::Pool(index)),
+                    BcArr::V(Value::Nil),
+                    BcArr::V(Value::Reg(res)),
+                );
+            }
             Expr::Grouping { expr } => {
-                res = self.expression(*expr);
-            },
+                res = self.expression(expr);
+            }
             Expr::Assignment { name, expr } => {
-                let s = name.value;
-                let register_index = self.expression(*expr);
+                let s = name.value.clone();
+                let register_index = self.expression(expr);
                 let pool_index = self.get_pool(&s);
 
-                self.emit_instr(BcArr::I(Instr::PushP), 
-                                BcArr::V(Value::Reg(register_index)), 
-                                BcArr::V(Value::Nil), 
-                                BcArr::V(Value::Pool(pool_index)));
-            },
+                self.emit_instr(
+                    BcArr::I(Instr::PushP),
+                    BcArr::V(Value::Reg(register_index)),
+                    BcArr::V(Value::Nil),
+                    BcArr::V(Value::Pool(pool_index)),
+                );
+            }
             Expr::Call { callee, arguments } => {
                 let pos;
                 // Figure out position of called function
-                match *callee {
+                match &**callee {
                     Variable { name } => {
                         pos = match self.function_list.get(&name.value) {
-                            Some(v) => { *v as isize },
-                            None    => { 
-                                panic!("Runtime Error: function: '{}' that you \
+                            Some(v) => *v as isize,
+                            None => {
+                                panic!(
+                                    "Runtime Error: function: '{}' that you \
                                     attempt to call on line {} does not exist",
-                                       name.value, name.line_num);
-                            },
+                                    name.value, name.line_num
+                                );
+                            }
                         };
-                    },
-                _ => { panic!("Runtime Error: Error during call"); },
+                    }
+                    _ => {
+                        panic!("Runtime Error: Error during call");
+                    }
                 }
 
                 // Emit push argument instructions for every argument
                 for arg in arguments.into_iter() {
                     let register_index = self.expression(arg);
 
-                    self.emit_instr(BcArr::I(Instr::PushA), 
-                                BcArr::V(Value::Reg(register_index)), 
-                                BcArr::V(Value::Nil), 
-                                BcArr::V(Value::Nil));
+                    self.emit_instr(
+                        BcArr::I(Instr::PushA),
+                        BcArr::V(Value::Reg(register_index)),
+                        BcArr::V(Value::Nil),
+                        BcArr::V(Value::Nil),
+                    );
                 }
 
-                self.emit_instr(BcArr::I(Instr::Call), 
-                                BcArr::V(Value::VAddr(pos)), 
-                                BcArr::V(Value::Nil), 
-                                BcArr::V(Value::Nil));
+                self.emit_instr(
+                    BcArr::I(Instr::Call),
+                    BcArr::V(Value::VAddr(pos)),
+                    BcArr::V(Value::Nil),
+                    BcArr::V(Value::Nil),
+                );
 
                 res = self.get_next_reg();
 
-                self.emit_instr(BcArr::I(Instr::LoadR), 
-                        BcArr::V(Value::Reg(0)), 
-                        BcArr::V(Value::Nil), 
-                        BcArr::V(Value::Reg(res)));
-            },
-            Expr::Logical { l_expr, operator, r_expr } => {
-                match operator {
-                    And => { 
-                        self.expression(*l_expr);
-                        let offset = self.bytecode.len() + 1;
-                        self.emit_instr(BcArr::I(Instr::JmpIN), 
-                                        BcArr::V(Value::VAddr(0)), 
-                                        BcArr::V(Value::Nil), 
-                                        BcArr::V(Value::Nil));
+                self.emit_instr(
+                    BcArr::I(Instr::LoadR),
+                    BcArr::V(Value::Reg(0)),
+                    BcArr::V(Value::Nil),
+                    BcArr::V(Value::Reg(res)),
+                );
+            }
+            Expr::Logical {
+                l_expr,
+                operator,
+                r_expr,
+            } => match operator {
+                And => {
+                    self.expression(l_expr);
+                    let offset = self.bytecode.len() + 1;
+                    self.emit_instr(
+                        BcArr::I(Instr::JmpIN),
+                        BcArr::V(Value::VAddr(0)),
+                        BcArr::V(Value::Nil),
+                        BcArr::V(Value::Nil),
+                    );
 
-                        let tmp = self.reg_counter;
-                        self.expression(*r_expr);
-                        self.reg_counter = tmp;
-                        let jmp: isize = (self.bytecode.len() - offset - 1) as isize;
-                        self.bytecode[offset] = BcArr::V(Value::VAddr(jmp));
-                    }
-                    Or  => { 
-                        self.expression(*l_expr);
-                        let offset = self.bytecode.len() + 1;
-                        self.emit_instr(BcArr::I(Instr::JmpIf), 
-                                        BcArr::V(Value::VAddr(0)), 
-                                        BcArr::V(Value::Nil), 
-                                        BcArr::V(Value::Nil));
-
-                        let tmp = self.reg_counter;
-                        self.expression(*r_expr);
-                        self.reg_counter = tmp;
-                        let jmp: isize = (self.bytecode.len() - offset - 1) as isize;
-                        self.bytecode[offset] = BcArr::V(Value::VAddr(jmp));
-                    },
+                    let tmp = self.reg_counter;
+                    self.expression(r_expr);
+                    self.reg_counter = tmp;
+                    let jmp: isize = (self.bytecode.len() - offset - 1) as isize;
+                    self.bytecode[offset] = BcArr::V(Value::VAddr(jmp));
                 }
+                Or => {
+                    self.expression(l_expr);
+                    let offset = self.bytecode.len() + 1;
+                    self.emit_instr(
+                        BcArr::I(Instr::JmpIf),
+                        BcArr::V(Value::VAddr(0)),
+                        BcArr::V(Value::Nil),
+                        BcArr::V(Value::Nil),
+                    );
 
+                    let tmp = self.reg_counter;
+                    self.expression(r_expr);
+                    self.reg_counter = tmp;
+                    let jmp: isize = (self.bytecode.len() - offset - 1) as isize;
+                    self.bytecode[offset] = BcArr::V(Value::VAddr(jmp));
+                }
             },
-            _ => { panic!("Expression not yet implemented in codegen: {:#?}", expr); },
+            _ => {
+                panic!("Expression not yet implemented in codegen: {:#?}", expr);
+            }
         }
         res
     }

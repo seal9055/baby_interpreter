@@ -1,24 +1,23 @@
-mod lexer;
-mod tokens;
-mod parser;
 mod ast;
-mod err;
 mod codegen;
+mod err;
+mod lexer;
+mod parser;
+mod tokens;
 mod vm;
 
 extern crate colored;
 
+use codegen::{BcArr, Codegen, Instr, Value};
 use colored::*;
-use std::{fs};
-use std::env;
-use lexer::{tokenize};
-use parser::{Parser};
-use codegen::{Codegen, Value, BcArr, Instr};
+use lexer::tokenize;
+use parser::Parser;
+use std::{env, fs};
 use vm::Interpreter;
 
-const DEBUGSOURCE  : bool = true;
-const DEBUGTOKENS  : bool = false;
-const DEBUGAST     : bool = false;
+const DEBUGSOURCE: bool = true;
+const DEBUGTOKENS: bool = false;
+const DEBUGAST: bool = false;
 const DEBUGBYTECODE: bool = true;
 
 /// Used to print a line until \n (debug purposes)
@@ -26,10 +25,12 @@ fn print_line(file: String, line: u32) {
     let mut count: u32 = 0;
     println!();
     for c in file.chars() {
-        if count == line-1 {
+        if count == line - 1 {
             print!("{}", c);
-        } 
-        if c == '\n' { count +=1; }
+        }
+        if c == '\n' {
+            count += 1;
+        }
     }
 }
 
@@ -43,13 +44,12 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
         println!("Please provide your .js file as the sole argument");
-        return ;
+        return;
     }
-    
+
     // Get file_name from argv and read the entire file into file_string
     let file_name = args[1].to_string();
-    let file_string = fs::read_to_string(file_name)
-        .expect("Unable to read file");
+    let file_string = fs::read_to_string(file_name).expect("Unable to read file");
 
     if DEBUGSOURCE {
         println!("\n+-----------Source-Code-----------+");
@@ -65,17 +65,21 @@ fn main() {
             println!("{:?}", token);
         }
     }
-    
+
     let mut parser = Parser::new(tokens);
-    let stmts  = match parser.parse() {
+    let stmts = match parser.parse() {
         Ok(stmts) => stmts,
-        Err(err)  => { 
+        Err(err) => {
             for e in err {
                 print_line(file_string.clone(), e.line);
                 println!("{}\n\n", e.err.bold());
             }
-            println!("{}", "Could not compile program due to above errors\n"
-                     .red().bold()); 
+            println!(
+                "{}",
+                "Could not compile program due to above errors\n"
+                    .red()
+                    .bold()
+            );
             return;
         }
     };
@@ -98,32 +102,66 @@ fn main() {
         for (j, instr) in program.bytecode.iter().enumerate() {
             if vals.contains(&j) {
                 for (key, value) in program.clone().function_list.into_iter() {
-                    if value == j { print!("\n\n\t< {} >", key); }
+                    if value == j {
+                        print!("\n\n\t< {} >", key);
+                    }
                 }
             }
-            if j == program.entry_point { print!("\n\n\t< Entry Point >"); }
-            let i = j+1;
+            if j == program.entry_point {
+                print!("\n\n\t< Entry Point >");
+            }
+            let i = j + 1;
             match instr.clone() {
-                BcArr::I(Instr::Add)  => { print!("\n{:4}   Add     ", i) },
-                BcArr::I(Instr::Sub)  => { print!("\n{:4}   Sub     ", i) },
-                BcArr::I(Instr::Div)  => { print!("\n{:4}   Div     ", i) },
-                BcArr::I(Instr::Mul)  => { print!("\n{:4}   Mul     ", i) },
-                BcArr::I(Instr::Jmp)  => { print!("\n{:4}   Jmp     ", i) },
-                BcArr::I(Instr::Call) => { print!("\n{:4}   Call    ", i) },
-                BcArr::I(v)           => { print!("\n{:4}   {:?}   ", i, v) },
-                BcArr::V(Value::Number(v)) => { print!("{:?}, ", v) },
-                BcArr::V(Value::Reg(v)) => { print!("{:?}, ", Value::Reg(v)) },
-                BcArr::V(Value::Pool(v)) => { print!("{:?}, ", Value::Pool(v)) },
-                BcArr::V(Value::StringLiteral(v)) => { print!("{:?}, ", v) },
-                BcArr::V(Value::CPool(v)) => { print!("{:?}, ", Value::CPool(v)) },
-                BcArr::V(Value::Bool(v)) => { print!("{:?}, ", Value::Bool(v)) },
-                BcArr::V(Value::VAddr(v)) => { print!("{:?}, ", Value::VAddr(v)) },
-                BcArr::V(Value::Nil) => { print!("NIL") },
-            } 
+                BcArr::I(Instr::Add) => {
+                    print!("\n{:4}   Add     ", i)
+                }
+                BcArr::I(Instr::Sub) => {
+                    print!("\n{:4}   Sub     ", i)
+                }
+                BcArr::I(Instr::Div) => {
+                    print!("\n{:4}   Div     ", i)
+                }
+                BcArr::I(Instr::Mul) => {
+                    print!("\n{:4}   Mul     ", i)
+                }
+                BcArr::I(Instr::Jmp) => {
+                    print!("\n{:4}   Jmp     ", i)
+                }
+                BcArr::I(Instr::Call) => {
+                    print!("\n{:4}   Call    ", i)
+                }
+                BcArr::I(v) => {
+                    print!("\n{:4}   {:?}   ", i, v)
+                }
+                BcArr::V(Value::Number(v)) => {
+                    print!("{:?}, ", v)
+                }
+                BcArr::V(Value::Reg(v)) => {
+                    print!("{:?}, ", Value::Reg(v))
+                }
+                BcArr::V(Value::Pool(v)) => {
+                    print!("{:?}, ", Value::Pool(v))
+                }
+                BcArr::V(Value::StringLiteral(v)) => {
+                    print!("{:?}, ", v)
+                }
+                BcArr::V(Value::CPool(v)) => {
+                    print!("{:?}, ", Value::CPool(v))
+                }
+                BcArr::V(Value::Bool(v)) => {
+                    print!("{:?}, ", Value::Bool(v))
+                }
+                BcArr::V(Value::VAddr(v)) => {
+                    print!("{:?}, ", Value::VAddr(v))
+                }
+                BcArr::V(Value::Nil) => {
+                    print!("NIL")
+                }
+            }
         }
         if !program.const_pool.is_empty() {
             println!("\n+-----------Const-Pool-------------+\n");
-            for (i,c) in program.const_pool.iter().enumerate() {
+            for (i, c) in program.const_pool.iter().enumerate() {
                 println!("[{}] - {:?}", i, c);
             }
         }

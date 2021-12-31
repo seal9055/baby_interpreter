@@ -45,7 +45,7 @@ impl Parser {
         }
         false
     }
-     
+
     fn check(&self, t_type: TokenType) -> bool {
         if self.is_at_end() { return false; }
         return self.peek().t_type == t_type;
@@ -56,7 +56,7 @@ impl Parser {
     }
 
     /// Consume a token if it has the correct type and advance the parser
-    fn consume(&mut self, t_type: TokenType, msg: &str, l: u32) 
+    fn consume(&mut self, t_type: TokenType, msg: &str, l: u32)
             -> Result<Token, Error> {
         if self.check(t_type) {
             Ok(self.next().clone())
@@ -109,33 +109,33 @@ impl Parser {
     }
 
     fn fun_decl(&mut self) -> Result<Stmt, Error> {
-        let fun_name = self.consume(Identifier, "Expected function name", 
+        let fun_name = self.consume(Identifier, "Expected function name",
                                     self.lc())?;
-        self.consume(OpenParen, "Expected '(' after function declaration", 
+        self.consume(OpenParen, "Expected '(' after function declaration",
                     self.lc())?;
-        
+
         let mut args: Vec<Token> = Vec::new();
         if !self.check(CloseParen) {
-            args.push(self.consume(Identifier, "Expected parameter name", 
+            args.push(self.consume(Identifier, "Expected parameter name",
                                    self.lc())?);
             while self.check(Comma) {
                 self.consume(Comma, "weird error", self.lc())?;
-                args.push(self.consume(Identifier, "Expected parameter name", 
+                args.push(self.consume(Identifier, "Expected parameter name",
                                        self.lc())?);
             }
         }
         self.consume(CloseParen, "Expected ')' after function arguments"
                      ,self.lc())?;
-        self.consume(OpenCurly, "Expected '{' after function header", 
+        self.consume(OpenCurly, "Expected '{' after function header",
                      self.lc())?;
         let fun_body = self.block_statement()?;
         Ok(Stmt::Function(fun_name, args, vec![fun_body]))
     }
 
     fn var_decl(&mut self) -> Result<Stmt, Error> {
-        let var_name = self.consume(Identifier, "Expected var name", 
+        let var_name = self.consume(Identifier, "Expected var name",
                                     self.lc())?;
-        let mut initializer: Option<Expr> = None; 
+        let mut initializer: Option<Expr> = None;
 
         // Parse variable initialization using equal sign
         if self.match_tokens(&[EqualSign]) {
@@ -145,14 +145,14 @@ impl Parser {
         // Parse SemiColon after var declaration
         self.consume(SemiColon, "Expected ';' after variable declaration",
                      self.lc())?;
-        
+
         Ok(Stmt::Variable(var_name, initializer))
     }
 
     fn let_decl(&mut self) -> Result<Stmt, Error> {
-        let var_name = self.consume(Identifier, "Expected var name", 
+        let var_name = self.consume(Identifier, "Expected var name",
                                     self.lc())?;
-        let mut initializer: Option<Expr> = None; 
+        let mut initializer: Option<Expr> = None;
 
         // Parse variable initialization using equal sign
         if self.match_tokens(&[EqualSign]) {
@@ -162,7 +162,7 @@ impl Parser {
         // Parse SemiColon after var declaration
         self.consume(SemiColon, "Expected ';' after variable declaration",
                      self.lc())?;
-        
+
         Ok(Stmt::Variable(var_name, initializer))
     }
 
@@ -218,10 +218,10 @@ impl Parser {
     }
 
     fn while_statement(&mut self) -> Result<Stmt, Error> {
-        self.consume(OpenParen, "Expected '(' after while statement", 
+        self.consume(OpenParen, "Expected '(' after while statement",
                      self.lc())?;
         let cond = self.expression()?;
-        self.consume(CloseParen, "Expected ')' after while condition", 
+        self.consume(CloseParen, "Expected ')' after while condition",
                      self.lc())?;
         let body = Box::new(self.statement()?);
         Ok(Stmt::While(cond, body))
@@ -242,7 +242,7 @@ impl Parser {
         } else {
             None
         };
-        self.consume(SemiColon, "Expected ';' after loop condition", 
+        self.consume(SemiColon, "Expected ';' after loop condition",
                      self.lc())?;
 
         let increment = if !self.check(CloseParen) {
@@ -270,7 +270,7 @@ impl Parser {
         if self.check(SemiColon) {
             self.next();
             return Ok(Stmt::Return(None));
-        } 
+        }
         let expr = self.expression()?;
         self.consume(SemiColon, "Expected ';' after value", self.lc())?;
 
@@ -295,7 +295,7 @@ impl Parser {
         if self.match_tokens(&[EqualSign]) {
             let _equals = self.previous();
             let value = self.assignment()?;
-        
+
             match expr {
                 Expr::Variable { name, ..} => {
                     return Ok(Expr::Assignment {
@@ -316,7 +316,7 @@ impl Parser {
         while self.match_tokens(&[Or]) {
             let right = self.and()?;
             expr = Expr::Logical {
-                l_expr: Box::new(expr), 
+                l_expr: Box::new(expr),
                 operator: LogicalOp::Or,
                 r_expr: Box::new(right),
             };
@@ -328,15 +328,15 @@ impl Parser {
         let mut expr = self.equality()?;
         while self.match_tokens(&[And]) {
             let right = self.equality()?;
-            expr = Expr::Logical { 
-                l_expr: Box::new(expr), 
+            expr = Expr::Logical {
+                l_expr: Box::new(expr),
                 operator: LogicalOp::And,
                 r_expr: Box::new(right),
             };
         }
         Ok(expr)
     }
-    
+
     fn equality(&mut self) -> Result<Expr, Error> {
         let mut expr = self.comparison()?;
 
@@ -427,32 +427,32 @@ impl Parser {
             }
         }
         self.consume(CloseParen, "Expected closing parantheses", self.lc())?;
-        Ok(Expr::Call { 
-            callee: Box::new(expr), 
+        Ok(Expr::Call {
+            callee: Box::new(expr),
             arguments: args
             })
     }
 
     fn primary(&mut self) -> Result<Expr, Error> {
-        if self.match_tokens(&[True]) { 
+        if self.match_tokens(&[True]) {
             return Ok(Expr::Literal { literal: Literal::True });
         }
 
-        if self.match_tokens(&[False]) { 
+        if self.match_tokens(&[False]) {
             return Ok(Expr::Literal { literal: Literal::False });
         }
 
-        if self.match_tokens(&[Nil]) { 
+        if self.match_tokens(&[Nil]) {
             return Ok(Expr::Literal { literal: Literal::Nil });
         }
 
-        if self.match_tokens(&[Number]) { 
+        if self.match_tokens(&[Number]) {
             return Ok(Expr::Literal { literal: Literal::Number(
-                        self.previous().value.parse::<f32>().unwrap() as f64) 
+                        self.previous().value.parse::<f32>().unwrap() as f64)
             });
         }
 
-        if self.match_tokens(&[StringLiteral]) { 
+        if self.match_tokens(&[StringLiteral]) {
             return Ok(Expr::Literal { literal: Literal::StringLiteral(
                         self.previous().clone().value)
             });
@@ -463,16 +463,16 @@ impl Parser {
                 name: self.previous().clone()
             });
         }
-        
+
         if self.match_tokens(&[OpenParen]) {
             let expr = self.expression()?;
-            self.consume(CloseParen, "Expected closing parantheses", 
+            self.consume(CloseParen, "Expected closing parantheses",
                          self.lc())?;
             return Ok(Expr::Grouping { expr: Box::new(expr), });
         }
 
         self.next();
-        Err(Error::new(format!("Error on line: {} at token: {}", 
+        Err(Error::new(format!("Error on line: {} at token: {}",
                     self.peek().line_num, self.previous().value), self.lc()))
     }
 }
