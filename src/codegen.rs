@@ -2,8 +2,10 @@ use crate::{
     ast::{Expr, Expr::Variable, Literal, LogicalOp::And, LogicalOp::Or, Stmt},
     tokens::Token,
     tokens::TokenType::*,
+    vm,
 };
 use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -17,7 +19,7 @@ pub enum Value {
     VAddr(isize),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum Instr {
     // Load Immediate into register
     LoadI,
@@ -86,7 +88,7 @@ pub enum Instr {
     Print,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BcArr {
     I(Instr),
     V(Value),
@@ -98,6 +100,36 @@ pub struct Vars {
     depth: u8,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Block {
+    pub instrs: Vec<(usize, BcArr)>,
+    pub edges: Vec<usize>,
+    pub dsts: Vec<usize>,
+}
+
+#[derive(Debug, Default)]
+pub struct Cfg {
+    /// <block-id, Block>
+    pub blocks: FxHashMap<usize, Block>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct Metadata {
+    /// <JmpIf/JmpIn address, (T, F)>
+    /// Maps start of the if-statement cfg-split to the t & Option<f> blocks
+    if_blocks: FxHashMap<usize, (usize, Option<usize>)>,
+
+    // <JmpIf/JmpIn address, (T, F)>
+    while_blocks: FxHashMap<usize, (usize, Option<usize>)>,
+}
+
+#[derive(Debug, Clone)]
+enum BlockType {
+    IfTrue,
+    IfFalse,
+    IfConvergence,
+}
+
 #[derive(Debug, Clone)]
 pub struct Program {
     pub bytecode: Vec<BcArr>,
@@ -107,6 +139,121 @@ pub struct Program {
     pub function_list: HashMap<String, usize>,
 
     pub const_pool: Vec<Value>,
+
+    pub metadata: Metadata,
+}
+
+impl Program {
+    /// TODO: Breaks on a lot of code structures, including loops
+    /// Prob full rewrite to prepass that finds all labels
+    fn compute_func_cfg(&self, start: usize, end: usize, cfg: &mut Cfg) {
+        let mut block_id = 0;
+        let mut cur_label = start;
+        let mut block_worklist: FxHashMap<usize, usize> = FxHashMap::default();
+        let mut cur_block = Block::default();
+        let mut ip_to_block_id: FxHashMap<usize, usize> = FxHashMap::default();
+
+        ip_to_block_id.insert(cur_label, block_id);
+
+        while cur_label < end {
+            // `JmpIf` hit, allocate new blocks and point edges to them
+            if let Some(x) = self.metadata.if_blocks.get(&cur_label) {
+                cur_block.dsts.push(x.0);
+                block_worklist.insert(x.0, x.0);
+                if let Some(f_block_ip) = x.1 {
+                    cur_block.dsts.push(f_block_ip);
+                    block_worklist.insert(f_block_ip, f_block_ip);
+                }
+                cfg.blocks.insert(block_id, cur_block);
+                block_id += 1;
+                cur_block = Block::default();
+                ip_to_block_id.insert(cur_label, block_id);
+            }
+            
+            if cur_block.instrs.len() != 0 {
+                if let Some(x) = block_worklist.get(&cur_label) {
+                    // If previous label was a jmp and not a normal pc-update, we already handled
+                    // the pc-update
+                    if self.bytecode[cur_label-2] != BcArr::I(Instr::Jmp) {
+                        cur_block.dsts.push(*x);
+                    }
+                    cfg.blocks.insert(block_id, cur_block);
+                    cur_block = Block::default();
+                    block_id += 1;
+                    ip_to_block_id.insert(cur_label, block_id);
+                }
+            };
+
+            match self.bytecode[cur_label] {
+                BcArr::I(Instr::Ret) => {
+                    cur_block.instrs.push((cur_label, self.bytecode[cur_label].clone()));
+                    // Force end of loop
+                    cur_label = end;
+                },
+                BcArr::I(Instr::PushA) |
+                BcArr::I(Instr::Print) |
+                BcArr::I(Instr::LoadA) |
+                BcArr::I(Instr::Call)  |
+                BcArr::I(Instr::JmpIf) => {
+                    cur_block.instrs.push((cur_label, self.bytecode[cur_label].clone()));
+                    cur_label += 2;
+                }
+                BcArr::I(Instr::LoadP) |
+                BcArr::I(Instr::LoadR) |
+                BcArr::I(Instr::LoadC) |
+                BcArr::I(Instr::PushP) |
+                BcArr::I(Instr::LoadI) => {
+                    cur_block.instrs.push((cur_label, self.bytecode[cur_label].clone()));
+                    cur_label += 3;
+                },
+                BcArr::I(Instr::Add) |
+                BcArr::I(Instr::CmpLE) |
+                BcArr::I(Instr::CmpGT) => {
+                    cur_block.instrs.push((cur_label, self.bytecode[cur_label].clone()));
+                    cur_label += 4;
+                },
+                BcArr::I(Instr::Jmp) => {
+                    cur_block.instrs.push((cur_label, self.bytecode[cur_label].clone()));
+                    cur_label += 2;
+
+                    let dst = vm::Interpreter::unpack_vaddr(self.bytecode[cur_label-1].clone());
+                    cur_block.dsts.push(cur_label + dst);
+                    block_worklist.insert(cur_label + dst, cur_label + dst);
+                },
+                _ => {
+                    panic!("Handling: {:?}", self.bytecode[cur_label]);
+                }
+            }
+        }
+        cfg.blocks.insert(block_id, cur_block);
+        cfg.blocks.iter_mut().for_each(|b| {
+            for dst in &b.1.dsts {
+                b.1.edges.push(*ip_to_block_id.get(&dst).unwrap());
+            }
+            
+        });
+    }
+
+    /// Returns Vec<Function-name, Control-flow-graph>
+    pub fn generate_cfg(&self) -> Vec<(String, Cfg)> {
+        let mut funcs = Vec::new();
+
+        // Base function describing outer scope
+        let start = self.entry_point;
+        let end = self.bytecode.len();
+
+        funcs.push(("__init".to_string(), Cfg::default()));
+        self.compute_func_cfg(start, end, &mut funcs[0].1);
+
+        let mut i = 1;
+        for f in &self.function_list {
+            funcs.push((f.0.to_string(), Cfg::default()));
+            self.compute_func_cfg(*f.1, end, &mut funcs[i].1);
+            i += 1;
+        }
+
+        funcs
+    }
 }
 
 pub struct Codegen {
@@ -134,6 +281,8 @@ pub struct Codegen {
     /// Entrypoint within bytecode array (necessary because no main function is
     /// used)
     entry_point: Option<usize>,
+
+    metadata: Metadata,
 }
 
 impl Codegen {
@@ -148,6 +297,7 @@ impl Codegen {
             cur_depth: 0,
             pool: Vec::new(),
             entry_point: None,
+            metadata: Metadata::default(),
         };
 
         for node in ast {
@@ -160,6 +310,7 @@ impl Codegen {
                 entry_point: v,
                 function_list: codegen.function_list,
                 const_pool: codegen.const_pool,
+                metadata: codegen.metadata,
             },
             None => {
                 panic!("Runtime Error: Could not determine entry point");
@@ -373,9 +524,15 @@ impl Codegen {
             BcArr::V(Value::Nil),
         );
 
-        if let Some(x) = f {
+        let a1 = self.bytecode.len();
+
+        let a3 = if let Some(x) = f {
+            let tmp = self.bytecode.len();
             self.interpret_node(&*x);
-        }
+            Some(tmp)
+        } else {
+            Option::None
+        };
 
         let offset2 = self.bytecode.len() + 1;
         self.emit_instr(
@@ -387,12 +544,15 @@ impl Codegen {
 
         let jmp_1: isize = (self.bytecode.len() - offset1 - 1) as isize;
         self.reg_counter = tmp;
+        let a2 = self.bytecode.len();
         self.interpret_node(&*t); // Interpret true block
         let jmp_2: isize = (self.bytecode.len() - offset2 - 1) as isize;
 
         // Patch in correct offsets after calculating them
         self.bytecode[offset1] = BcArr::V(Value::VAddr(jmp_1));
         self.bytecode[offset2] = BcArr::V(Value::VAddr(jmp_2));
+
+        self.metadata.if_blocks.insert(a1, (a2, a3));
     }
 
     /// Interpret while statements

@@ -5,6 +5,8 @@ mod lexer;
 mod parser;
 mod tokens;
 mod vm;
+mod ai;
+mod comp_ai;
 
 extern crate colored;
 
@@ -14,10 +16,12 @@ use lexer::tokenize;
 use parser::Parser;
 use std::{env, fs};
 use vm::Interpreter;
+//use ai::AbstractInterpreter;
+use comp_ai::AbstractInterpreter;
 
 const DEBUGSOURCE: bool = true;
 const DEBUGTOKENS: bool = false;
-const DEBUGAST: bool = false;
+const DEBUGAST: bool = true;
 const DEBUGBYTECODE: bool = true;
 
 /// Used to print a line until \n (debug purposes)
@@ -167,6 +171,12 @@ fn main() {
         }
         println!("\n+----------------------------------+\n");
     }
+
+    let cfg = program.generate_cfg();
+    //println!("CFG: {:#?}", cfg);
+
+    let mut abstract_interpreter= AbstractInterpreter::new(&program);
+    abstract_interpreter.run(&cfg[0].1);
 
     let mut vm = Interpreter::new(program);
     vm.interpret();

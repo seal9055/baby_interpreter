@@ -90,32 +90,32 @@ impl Interpreter {
     }
 
     /// Unpacks a register from the BcArr enum
-    fn unpack_register(reg: BcArr) -> usize {
+    pub fn unpack_register(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Reg(c)) => c) as usize
     }
 
     /// Unpacks a value from the BcArr enum
-    fn unpack_value(val: BcArr) -> Value {
+    pub fn unpack_value(val: BcArr) -> Value {
         extract_enum_value!(val, BcArr::V(c) => c)
     }
 
     /// Unpacks a local pool index from the BcArr enum
-    fn unpack_pool(reg: BcArr) -> usize {
+    pub fn unpack_pool(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::Pool(c)) => c) as usize
     }
 
     /// Unpacks a VAddr from the BcArr enum
-    fn unpack_vaddr(reg: BcArr) -> usize {
+    pub fn unpack_vaddr(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::VAddr(c)) => c) as usize
     }
 
     /// Unpacks a constant pool index from the BcArr enum
-    fn unpack_cpool(reg: BcArr) -> usize {
+    pub fn unpack_cpool(reg: BcArr) -> usize {
         extract_enum_value!(reg, BcArr::V(Value::CPool(c)) => c) as usize
     }
 
     /// Unpacks a number from the Value enum
-    fn unpack_number(num: &Value) -> f64 {
+    pub fn unpack_number(num: &Value) -> f64 {
         *extract_enum_value!(num, Value::Number(c) => c)
     }
 
